@@ -1,0 +1,23 @@
+{
+ "name": "PDF Giáo Án",
+ "short_name": "PDF Giáo Án",
+ "description": "Chuyển PDF toán sang Word, giữ công thức và hình",
+ "start_url": "/",
+ "display": "standalone",
+ "background_color": "#f5f7fb",
+ "theme_color": "#1d4ed8",
+ "lang": "vi",
+ "icons": [
+  {
+   "src": "/static/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "/static/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ]
+}

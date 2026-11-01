@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+tests/out.docx
+tests/r/
+tests/_p2.png
+.git

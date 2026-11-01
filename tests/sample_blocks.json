@@ -1,0 +1,152 @@
+{
+ "1": [
+  {
+   "type": "columns",
+   "cells": [
+    "UBND PHƯỜNG YÊN SỞ\n**TRƯỜNG THCS CHU VĂN AN**\n[box] ĐỀ CHÍNH THỨC",
+    "**ĐỀ KIỂM TRA THÁNG 10 (GIỮA HKI)**\nMôn kiểm tra: TOÁN – LỚP 9\nNgày kiểm tra: 27/10/2026\n*Thời gian làm bài : 120 phút*"
+   ],
+   "aligns": [
+    "center",
+    "center"
+   ],
+   "widths": [
+    44,
+    56
+   ]
+  },
+  {
+   "type": "paragraph",
+   "text": "*(Đề 2 – Đề kiểm tra gồm 02 trang)*",
+   "align": "center"
+  },
+  {
+   "type": "paragraph",
+   "text": "**Bài 1. (1,5 điểm)** Giải các phương trình sau"
+  },
+  {
+   "type": "columns",
+   "cells": [
+    "1) $(x+3)(2x-1)=0$",
+    "2) $\\frac{x+3}{x-3}-\\frac{3}{x}=\\frac{18}{x^{2}-3x}$"
+   ],
+   "widths": [
+    47,
+    53
+   ]
+  },
+  {
+   "type": "paragraph",
+   "text": "**Bài 2. (1,5 điểm)** Giải các hệ phương trình sau"
+  },
+  {
+   "type": "columns",
+   "cells": [
+    "1) $\\begin{cases}-2x+y=-5\\\\ x+2y=0\\end{cases}$",
+    "2) $\\begin{cases}-\\frac{1}{x}+2y=3\\\\ \\frac{2}{x}-3y=1\\end{cases}$"
+   ],
+   "widths": [
+    47,
+    53
+   ]
+  },
+  {
+   "type": "paragraph",
+   "text": "**Bài 3. (2,5 điểm)**"
+  },
+  {
+   "type": "paragraph",
+   "text": "1) Năm ngoái, hai đơn vị sản xuất nông nghiệp thu hoạch được 800 tấn thóc. Năm nay, đơn vị thứ nhất làm vượt mức 15%, đơn vị thứ hai làm vượt mức 20% so với năm ngoái. Do đó cả hai đơn vị thu hoạch được 945 tấn thóc. Hỏi năm ngoái, mỗi đơn vị thu hoạch được bao nhiêu tấn thóc?",
+   "align": "justify",
+   "first_line": true
+  },
+  {
+   "type": "paragraph",
+   "text": "2) Có hai bể nước, bể thứ nhất chứa 1300 lít và bể thứ hai chứa 800 lít. Người ta tháo ra cùng một lúc ở bể thứ nhất mỗi phút 25 lít và ở bể thứ hai mỗi phút 15 lít. Hỏi sau bao lâu số nước còn lại ở hai bể bằng nhau.",
+   "align": "justify",
+   "first_line": true
+  },
+  {
+   "type": "paragraph",
+   "text": "3) Xác định a và b để đồ thị của hàm số $y=ax+b$ đi qua hai điểm A $(-2;\\,1)$ và B $(-4;\\,2)$",
+   "first_line": true
+  },
+  {
+   "type": "paragraph",
+   "text": "**Bài 4. ( 4 điểm)**"
+  },
+  {
+   "type": "text_figure",
+   "text": "1) Một người đi xe đạp lên dốc nghiêng AC có độ dài 108m như hình vẽ. Biết quãng đường lên dốc AC tạo với phương nằm ngang góc CAH bằng $15^{0}$",
+   "bbox": [
+    59.1,
+    60.2,
+    93.7,
+    66.3
+   ],
+   "side": "right"
+  },
+  {
+   "type": "paragraph",
+   "text": "a, Tính chiều cao CH của con dốc ( kết quả làm tròn đến hàng đơn vị)",
+   "indent": 1.5,
+   "space_before": 4
+  },
+  {
+   "type": "paragraph",
+   "text": "b, Khi xuống dốc người đó đi với vận tốc trung bình 3m/giây. Hỏi sau bao nhiêu giây từ đỉnh dốc người đó xuống đến chân dốc ở vị trí điểm B biết $\\widehat{CBH}=10^{0}$ (các kết quả làm tròn đến hàng đơn vị)",
+   "indent": 1.5,
+   "align": "justify"
+  },
+  {
+   "type": "paragraph",
+   "text": "2) Cho $\\triangle ABC$ nhọn $(AB>AC)$. Từ B kẻ tia Bx vuông góc với AB, từ C kẻ tia Cy vuông góc AC, Bx cắt Cy tại D.",
+   "indent": 1.0,
+   "align": "justify",
+   "space_before": 8
+  },
+  {
+   "type": "paragraph",
+   "text": "a) Chứng minh bốn điểm A, B, D, C cùng thuộc một đường tròn.",
+   "indent": 1.5
+  },
+  {
+   "type": "paragraph",
+   "text": "b) Kẻ đường cao AH của tam giác ABC. Gọi K là chân đường vuông góc kẻ từ B đến AD, AD cắt BC tại E. Chứng minh rằng : $AE.EK=HE.EB$ và $\\widehat{KHB}=\\widehat{DBK}$",
+   "indent": 1.5,
+   "align": "justify"
+  },
+  {
+   "type": "paragraph",
+   "text": "c) Gọi M là trung điểm của BC, I là trung điểm của AB. Chứng minh $2.\\sin\\widehat{MIK}=\\dfrac{HK}{IK}$",
+   "indent": 1.5
+  }
+ ],
+ "2": [
+  {
+   "type": "paragraph",
+   "text": "**Bài 5( 0,5 điểm)**"
+  },
+  {
+   "type": "paragraph",
+   "text": "Gia đình bác Nam có một khu đất hình chữ nhật, một cạnh đã được xây tường bao. Trên khu đất này bác Nam định cải tạo thành hai phần đất có dạng hình chữ nhật với 120m hàng rào để trồng rau và nuôi gà( tham khảo hình vẽ dưới đây). Ở đó bác đã tận dụng tường bao có sẵn để làm một cạnh của hàng rào. Vậy để rào khu đất trồng rau, nuôi gà sao cho diện tích lớn nhất thì kích thước các cạnh sẽ như thế nào?",
+   "align": "justify"
+  },
+  {
+   "type": "figure",
+   "bbox": [
+    23.7,
+    22.2,
+    77.3,
+    40.4
+   ],
+   "align": "center"
+  },
+  {
+   "type": "paragraph",
+   "text": "--------------------Hết--------------------",
+   "align": "center",
+   "space_before": 8
+  }
+ ]
+}

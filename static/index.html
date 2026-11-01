@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PDF Giáo Án</title>
+<meta name="theme-color" content="#1d4ed8">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<style>
+  :root { --bg:#f5f7fb; --card:#fff; --ink:#1b2333; --mute:#5b6478; --blue:#1d4ed8; --blue2:#e8efff; --line:#d7deea; --ok:#12805c; --bad:#b42318; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:18px/1.5 -apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  header { background:var(--blue); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:5; }
+  header h1 { font-size:21px; margin:0; flex:1; }
+  header button { background:rgba(255,255,255,.18); color:#fff; border:0; border-radius:10px; padding:8px 12px; font-size:16px; }
+  main { max-width:1200px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .btn { display:inline-block; background:var(--blue); color:#fff; border:0; border-radius:12px; padding:14px 22px; font-size:19px; font-weight:600; cursor:pointer; }
+  .btn.alt { background:var(--blue2); color:var(--blue); }
+  .btn.small { padding:8px 14px; font-size:16px; border-radius:10px; }
+  .btn[disabled] { opacity:.5; }
+  .drop { border:3px dashed #9db4ee; border-radius:16px; padding:34px 16px; text-align:center; background:#fafcff; cursor:pointer; }
+  .drop.over { background:var(--blue2); border-color:var(--blue); }
+  .drop b { font-size:21px; }
+  .steps li { margin:6px 0; }
+  .muted { color:var(--mute); font-size:16px; }
+  .err { color:var(--bad); font-weight:600; }
+  .ok { color:var(--ok); font-weight:600; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input[type=text], input[type=password], input[type=number], select, textarea { font:inherit; font-size:17px; border:1px solid var(--line); border-radius:10px; padding:8px 10px; width:100%; background:#fff; color:var(--ink); }
+  input[type=number] { width:90px; }
+  textarea { min-height:70px; resize:vertical; font-family:"Times New Roman",serif; font-size:18px; }
+  label { font-size:16px; color:var(--mute); }
+  .bar { height:22px; background:#e5eaf5; border-radius:12px; overflow:hidden; }
+  .bar > div { height:100%; width:0; background:var(--blue); transition:width .4s; }
+  .hidden { display:none !important; }
+  /* màn hình sửa */
+  .toolbar { position:sticky; top:56px; z-index:4; background:var(--bg); padding:8px 0; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .page { margin-bottom:26px; }
+  .page h2 { font-size:20px; margin:6px 0 10px; }
+  .cols { display:grid; grid-template-columns:1fr; gap:14px; }
+  @media (min-width:900px) { .cols { grid-template-columns:1fr 1fr; align-items:start; } .orig { position:sticky; top:120px; } }
+  .orig img { width:100%; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .blk { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px; }
+  .blk .hd { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+  .blk .hd .tag { flex:1; font-weight:700; font-size:15px; color:var(--blue); }
+  .blk .hd button { background:var(--blue2); color:var(--blue); border:0; border-radius:8px; width:38px; height:34px; font-size:17px; }
+  .blk .hd button.x { color:var(--bad); }
+  .pv { margin-top:8px; padding:8px 10px; background:#fbfbf4; border:1px dashed #d9d6a8; border-radius:8px; font-family:"Times New Roman",serif; font-size:19px; line-height:1.7; overflow-x:auto; }
+  .pv .box { border:1.5px solid #333; padding:1px 10px; font-weight:700; display:inline-block; }
+  .cell + .cell { margin-top:8px; }
+  .bb { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:6px 0; }
+  .bb input { width:100%; }
+  .fig { max-width:100%; border:1px solid var(--line); border-radius:6px; background:#fff; }
+  .modal { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:20; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .modal .card { max-width:560px; width:100%; max-height:92vh; overflow:auto; margin:0; }
+  .warn { background:#fff7e0; border:1px solid #f0d27a; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:16px; }
+  .saved { font-size:15px; color:var(--mute); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📄 PDF Giáo Án</h1>
+  <button id="btnSettings">⚙ Cài đặt</button>
+</header>
+<main>
+
+<!-- 1. TẢI FILE LÊN -->
+<section id="vHome">
+  <div class="card">
+    <b>Cách dùng (4 bước):</b>
+    <ol class="steps">
+      <li>Chọn file PDF (đề, giáo án…).</li>
+      <li>Bấm <b>“Đọc và chuyển”</b>, chờ máy đọc từng trang.</li>
+      <li>Xem lại: trang gốc ở bên cạnh, sửa chữ hoặc công thức nếu máy đọc sai.</li>
+      <li>Bấm <b>“Tải file Word”</b>.</li>
+    </ol>
+  </div>
+  <div class="card">
+    <div id="drop" class="drop">
+      <div><b>Bấm vào đây để chọn file PDF</b></div>
+      <div class="muted">hoặc kéo thả file vào ô này (tối đa <span id="maxmb">50</span>MB)</div>
+      <input id="file" type="file" accept="application/pdf,.pdf" class="hidden">
+    </div>
+    <div id="upInfo" class="hidden" style="margin-top:14px">
+      <div>📎 <b id="upName"></b> — <span id="upPages"></span> trang</div>
+      <div class="row" style="margin:10px 0">
+        <label>Chỉ đọc từ trang</label><input id="pFrom" type="number" min="1" value="1">
+        <label>đến trang</label><input id="pTo" type="number" min="1" value="1">
+      </div>
+      <button class="btn" id="btnGo">Đọc và chuyển</button>
+    </div>
+    <div id="homeMsg" class="err" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<!-- 2. ĐANG XỬ LÝ -->
+<section id="vBusy" class="hidden">
+  <div class="card">
+    <div id="busyText" style="font-weight:600;margin-bottom:10px">Đang xử lý…</div>
+    <div class="bar"><div id="barFill"></div></div>
+    <p class="muted">Mỗi trang mất khoảng 10–30 giây. Bạn có thể để màn hình tự chạy.</p>
+  </div>
+</section>
+
+<!-- 3. XEM VÀ SỬA -->
+<section id="vEdit" class="hidden">
+  <div class="toolbar">
+    <button class="btn" id="btnDocx">⬇ Tải file Word (.docx)</button>
+    <button class="btn alt small" id="btnNew">Làm file khác</button>
+    <span class="saved" id="saved"></span>
+  </div>
+  <div id="editMsg"></div>
+  <div id="pages"></div>
+</section>
+
+</main>
+
+<!-- CÀI ĐẶT -->
+<div id="mSettings" class="modal hidden">
+  <div class="card">
+    <h2 style="margin-top:0">Cài đặt</h2>
+    <p><b>Khóa Gemini</b> (miễn phí) — để máy đọc được chữ và công thức:</p>
+    <ol class="muted">
+      <li>Mở <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a>, đăng nhập Google.</li>
+      <li>Bấm “Create API key”, chép chuỗi khóa.</li>
+      <li>Dán vào ô dưới đây. Khóa chỉ lưu trên máy này.</li>
+    </ol>
+    <input id="setKey" type="password" placeholder="Dán khóa Gemini vào đây" autocomplete="off">
+    <p style="margin-bottom:4px"><label>Tên mô hình (thường để nguyên)</label></p>
+    <input id="setModel" type="text" list="modelList" autocomplete="off">
+    <datalist id="modelList"></datalist>
+    <div class="row" style="margin-top:12px">
+      <button class="btn alt small" id="btnCheckKey">Kiểm tra khóa</button>
+      <span id="keyMsg" class="muted"></span>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn" id="btnSaveSet">Lưu</button>
+      <button class="btn alt" id="btnCloseSet">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const LS = { get:(k,d)=>{ try { return localStorage.getItem(k) ?? d; } catch(e){ return d; } },
+             set:(k,v)=>{ try { localStorage.setItem(k,v); } catch(e){} },
+             del:(k)=>{ try { localStorage.removeItem(k); } catch(e){} } };
+
+const S = { job:null, pages:0, name:"", blocks:{}, cfg:{}, errors:{}, timer:null, saveT:null };
+
+/* ---------- hiển thị chữ + công thức (xem trước) ---------- */
+const TOKEN = /(\$[^$]+\$|\*\*.+?\*\*|\*[^*\s][^*]*?\*)/;
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function math(latex) {
+  try { if (window.katex) return katex.renderToString(latex, { throwOnError:false, output:"html" }); } catch(e){}
+  return "<code>" + esc(latex) + "</code>";
+}
+function rich(text) {
+  return (text || "").split("\n").map(line => {
+    let boxed = false;
+    if (line.startsWith("[box]")) { boxed = true; line = line.slice(5).trim(); }
+    const html = line.split(TOKEN).map(p => {
+      if (!p) return "";
+      if (p.length > 2 && p[0] === "$" && p.endsWith("$")) return math(p.slice(1,-1));
+      if (p.length > 4 && p.startsWith("**") && p.endsWith("**")) return "<b>" + esc(p.slice(2,-2)) + "</b>";
+      if (p.length > 2 && p[0] === "*" && p.endsWith("*")) return "<i>" + esc(p.slice(1,-1)) + "</i>";
+      return esc(p);
+    }).join("");
+    return boxed ? '<span class="box">' + html + "</span>" : html;
+  }).join("<br>");
+}
+
+/* ---------- gọi máy chủ ---------- */
+async function api(path, opt = {}) {
+  const h = Object.assign({}, opt.headers || {});
+  const key = LS.get("pga_key", "");
+  if (key) h["X-Gemini-Key"] = key;
+  const model = LS.get("pga_model", "");
+  if (model) h["X-Gemini-Model"] = model;
+  let r;
+  try { r = await fetch(path, Object.assign({}, opt, { headers:h })); }
+  catch (e) { throw new Error("Không kết nối được tới máy chủ. Hãy kiểm tra mạng."); }
+  if (!r.ok) {
+    let msg = "Có lỗi xảy ra (" + r.status + ").";
+    if (r.status === 413) msg = "File quá lớn (tối đa " + (S.cfg.max_mb || 50) + "MB).";
+    else { try { const j = await r.json(); if (j.error) msg = j.error; } catch(e){} }
+    const er = new Error(msg); er.status = r.status; throw er;
+  }
+  return r;
+}
+const show = id => { for (const v of ["vHome","vBusy","vEdit"]) $(v).classList.toggle("hidden", v !== id); window.scrollTo(0,0); };
+
+/* ---------- 1. tải lên ---------- */
+const drop = $("drop"), fileIn = $("file");
+drop.onclick = () => fileIn.click();
+fileIn.onchange = () => fileIn.files[0] && upload(fileIn.files[0]);
+["dragover","dragenter"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => e.dataTransfer.files[0] && upload(e.dataTransfer.files[0]));
+
+async function upload(f) {
+  $("homeMsg").textContent = "";
+  if (!/\.pdf$/i.test(f.name) && f.type !== "application/pdf") { $("homeMsg").textContent = "Hãy chọn file PDF (đuôi .pdf)."; return; }
+  if (f.size > (S.cfg.max_mb || 50) * 1048576) { $("homeMsg").textContent = "File quá lớn (tối đa " + (S.cfg.max_mb || 50) + "MB)."; return; }
+  $("upInfo").classList.add("hidden");
+  $("homeMsg").innerHTML = '<span class="muted">Đang tải file lên…</span>';
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    const j = await (await api("/api/upload", { method:"POST", body:fd })).json();
+    Object.assign(S, { job:j.job, pages:j.pages, name:j.name, blocks:{}, errors:{} });
+    LS.set("pga_job", j.job);
+    $("upName").textContent = j.name + ".pdf"; $("upPages").textContent = j.pages;
+    $("pFrom").value = 1; $("pTo").value = j.pages; $("pTo").max = j.pages;
+    $("upInfo").classList.remove("hidden"); $("homeMsg").textContent = "";
+  } catch (e) { $("homeMsg").textContent = e.message; }
+}
+
+$("btnGo").onclick = () => {
+  const a = Math.max(1, +$("pFrom").value || 1), b = Math.min(S.pages, +$("pTo").value || S.pages);
+  if (a > b) { $("homeMsg").textContent = "Khoảng trang chưa đúng."; return; }
+  startRecognize(a, b);
+};
+
+/* ---------- 2. nhận dạng ---------- */
+async function startRecognize(a, b) {
+  if (!S.cfg.server_key && !S.cfg.demo && !LS.get("pga_key", "")) { openSettings("Hãy dán khóa Gemini trước (làm theo 3 bước bên dưới)."); return; }
+  try {
+    await api("/api/job/" + S.job + "/recognize", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ from:a, to:b }) });
+  } catch (e) { $("homeMsg").textContent = e.message; if (S.blocks && Object.keys(S.blocks).length) show("vEdit"); return; }
+  show("vBusy"); $("barFill").style.width = "2%";
+  clearInterval(S.timer);
+  S.timer = setInterval(poll, 1200); poll();
+}
+async function poll() {
+  try {
+    const st = await (await api("/api/job/" + S.job + "/status")).json();
+    const pct = st.total ? Math.max(2, Math.round(100 * st.done / st.total)) : 2;
+    $("barFill").style.width = pct + "%";
+    $("busyText").textContent = st.state === "running" ? "Đang đọc trang " + (st.current || "") + " (xong " + st.done + "/" + st.total + ")…" : "Hoàn tất";
+    if (st.state === "done") { clearInterval(S.timer); S.errors = st.errors || {}; await loadEditor(); }
+  } catch (e) { clearInterval(S.timer); show("vHome"); $("homeMsg").textContent = e.message; }
+}
+
+/* ---------- 3. xem và sửa ---------- */
+async function loadEditor() {
+  const j = await (await api("/api/job/" + S.job + "/blocks")).json();
+  S.blocks = j.pages || {};
+  if (j.meta) { S.pages = j.meta.pages; S.name = j.meta.name; }
+  renderEditor(); show("vEdit");
+}
+const LABEL = { paragraph:"Đoạn chữ", columns:"Nhiều cột", boxed:"Chữ trong khung", figure:"Hình vẽ", text_figure:"Chữ + hình", formula:"Công thức" };
+
+function renderEditor() {
+  const root = $("pages"); root.innerHTML = "";
+  const errNums = Object.keys(S.errors || {});
+  $("editMsg").innerHTML = errNums.length ? '<div class="warn"><b>Có trang chưa đọc được:</b><br>' +
+    errNums.map(n => "Trang " + n + ": " + esc(S.errors[n]) + ' <button class="btn alt small" data-retry="' + n + '">Thử lại</button>').join("<br>") + "</div>" : "";
+  document.querySelectorAll("[data-retry]").forEach(b => b.onclick = () => { delete S.errors[b.dataset.retry]; startRecognize(+b.dataset.retry, +b.dataset.retry); });
+  for (let n = 1; n <= S.pages; n++) {
+    if (!S.blocks[n] && !S.errors[n]) continue;
+    const sec = document.createElement("div"); sec.className = "page"; sec.innerHTML = "<h2>Trang " + n + "</h2>";
+    const cols = document.createElement("div"); cols.className = "cols";
+    const orig = document.createElement("div"); orig.className = "orig";
+    orig.innerHTML = '<a href="/api/job/' + S.job + "/page/" + n + '.jpg" target="_blank"><img loading="lazy" src="/api/job/' + S.job + "/page/" + n + '.jpg" alt="Trang gốc ' + n + '"></a><div class="muted">Trang gốc (bấm để phóng to)</div>';
+    const right = document.createElement("div"); right.id = "blocks-" + n;
+    cols.append(orig, right); sec.append(cols); root.append(sec);
+    renderBlocks(n);
+  }
+}
+
+function renderBlocks(n) {
+  const wrap = $("blocks-" + n); wrap.innerHTML = "";
+  const list = S.blocks[n] || [];
+  list.forEach((b, i) => wrap.append(blockCard(n, i, b)));
+  if (S.blocks[n]) {
+    const add = document.createElement("div"); add.className = "row";
+    add.innerHTML = '<button class="btn alt small" data-add="paragraph">+ Thêm đoạn chữ</button> <button class="btn alt small" data-add="formula">+ Thêm công thức</button>';
+    add.querySelectorAll("button").forEach(btn => btn.onclick = () => {
+      list.push(btn.dataset.add === "formula" ? { type:"formula", latex:"" } : { type:"paragraph", text:"", align:"left", indent:0, first_line:false });
+      renderBlocks(n); changed();
+    });
+    wrap.append(add);
+  }
+}
+
+function blockCard(n, i, b) {
+  const list = S.blocks[n];
+  const el = document.createElement("div"); el.className = "blk";
+  el.innerHTML = '<div class="hd"><span class="tag">' + (LABEL[b.type] || b.type) + '</span><button data-a="up" title="Lên">↑</button><button data-a="dn" title="Xuống">↓</button><button class="x" data-a="del" title="Xóa">✕</button></div><div class="body"></div>';
+  el.querySelector('[data-a="up"]').onclick = () => { if (i > 0) { [list[i-1], list[i]] = [list[i], list[i-1]]; renderBlocks(n); changed(); } };
+  el.querySelector('[data-a="dn"]').onclick = () => { if (i < list.length - 1) { [list[i+1], list[i]] = [list[i], list[i+1]]; renderBlocks(n); changed(); } };
+  el.querySelector('[data-a="del"]').onclick = () => { if (confirm("Xóa khối này?")) { list.splice(i, 1); renderBlocks(n); changed(); } };
+  const body = el.querySelector(".body");
+
+  const field = (value, onInput, previewTarget, asLatex) => {
+    const ta = document.createElement("textarea"); ta.value = value;
+    ta.oninput = () => { onInput(ta.value); previewTarget(); changed(); };
+    return ta;
+  };
+  const pv = document.createElement("div"); pv.className = "pv";
+  const textOf = () => b.type === "formula" ? "$" + (b.latex || "") + "$" : (b.type === "columns" ? b.cells.join("\n———\n") : (b.text || ""));
+  const refresh = () => {
+    if (b.type === "figure") { pv.classList.add("hidden"); return; }
+    pv.innerHTML = b.type === "columns" ? b.cells.map(c => '<div class="cell">' + rich(c) + "</div>").join("") : rich(b.type === "formula" ? "$" + (b.latex || "") + "$" : (b.text || ""));
+  };
+
+  if (b.type === "columns") {
+    b.cells.forEach((c, k) => body.append(field(c, v => { b.cells[k] = v; }, refresh)));
+  } else if (b.type === "formula") {
+    body.append(field(b.latex || "", v => { b.latex = v; }, refresh));
+  } else if (b.type !== "figure") {
+    body.append(field(b.text || "", v => { b.text = v; }, refresh));
+  }
+  if (b.type === "paragraph") {
+    const r = document.createElement("div"); r.className = "row"; r.style.marginTop = "6px";
+    r.innerHTML = '<label>Căn</label><select style="width:auto"><option value="left">Trái</option><option value="center">Giữa</option><option value="justify">Đều hai bên</option><option value="right">Phải</option></select><label>Thụt lề (cm)</label><input type="number" step="0.5" min="0" max="8"><label><input type="checkbox"> Thụt dòng đầu</label>';
+    const [sel, num, chk] = r.querySelectorAll("select,input");
+    sel.value = b.align || "left"; num.value = b.indent || 0; chk.checked = !!b.first_line;
+    sel.onchange = () => { b.align = sel.value; changed(); };
+    num.oninput = () => { b.indent = +num.value || 0; changed(); };
+    chk.onchange = () => { b.first_line = chk.checked; changed(); };
+    body.append(r);
+  }
+  if (b.type === "figure" || b.type === "text_figure") {
+    const bb = document.createElement("div"); bb.className = "bb";
+    ["Trái %", "Trên %", "Phải %", "Dưới %"].forEach((lab, k) => {
+      const w = document.createElement("div"); w.innerHTML = "<label>" + lab + '</label><input type="number" step="0.5" min="0" max="100">';
+      const inp = w.querySelector("input"); inp.value = b.bbox[k];
+      inp.oninput = () => { b.bbox[k] = Math.max(0, Math.min(100, +inp.value || 0)); clearTimeout(inp._t); inp._t = setTimeout(setImg, 500); changed(); };
+      bb.append(w);
+    });
+    const img = document.createElement("img"); img.className = "fig"; img.alt = "Hình được cắt";
+    const setImg = () => { img.src = "/api/job/" + S.job + "/crop/" + n + ".jpg?bbox=" + b.bbox.join(",") + "&t=" + Date.now(); };
+    setImg();
+    body.append(bb, img);
+    const hint = document.createElement("div"); hint.className = "muted"; hint.textContent = "Hình bị cắt thiếu hoặc dư? Chỉnh các số % rồi xem hình ở trên.";
+    body.append(hint);
+  }
+  refresh(); el.append(pv);
+  return el;
+}
+
+/* ---------- tự lưu ---------- */
+function changed() {
+  $("saved").textContent = "Đang lưu…";
+  clearTimeout(S.saveT);
+  S.saveT = setTimeout(saveNow, 1500);
+}
+async function saveNow() {
+  try {
+    await api("/api/job/" + S.job + "/blocks", { method:"PUT", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ pages:S.blocks }) });
+    $("saved").textContent = "✓ Đã lưu";
+  } catch (e) { $("saved").textContent = "Chưa lưu được: " + e.message; }
+}
+
+/* ---------- tải Word ---------- */
+$("btnDocx").onclick = async () => {
+  const btn = $("btnDocx"); btn.disabled = true; const old = btn.textContent; btn.textContent = "Đang tạo file Word…";
+  try {
+    const r = await api("/api/job/" + S.job + "/docx", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ pages:S.blocks }) });
+    let warns = []; try { warns = JSON.parse(decodeURIComponent(r.headers.get("X-Warnings") || "[]")); } catch (e) {}
+    const blob = await r.blob(); const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = (S.name || "tai-lieu") + ".docx"; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    $("editMsg").innerHTML = '<div class="warn ok">✓ Đã tạo file Word.</div>' + (warns.length ? '<div class="warn"><b>Chú ý:</b><br>' + warns.map(esc).join("<br>") + "<br>(Chỗ tô vàng trong Word cần sửa tay.)</div>" : "");
+  } catch (e) { $("editMsg").innerHTML = '<div class="warn err">' + esc(e.message) + "</div>"; }
+  btn.disabled = false; btn.textContent = old;
+};
+$("btnNew").onclick = () => { if (confirm("Làm file khác? Bản đang sửa vẫn được lưu tạm vài giờ, nhưng bạn sẽ không mở lại được từ đây.")) { LS.del("pga_job"); $("upInfo").classList.add("hidden"); $("homeMsg").textContent = ""; fileIn.value = ""; show("vHome"); } };
+
+/* ---------- cài đặt ---------- */
+function openSettings(msg) { $("setKey").value = LS.get("pga_key", ""); $("setModel").value = LS.get("pga_model", "") || S.cfg.model || ""; $("keyMsg").textContent = msg || ""; $("mSettings").classList.remove("hidden"); }
+$("btnSettings").onclick = () => openSettings();
+$("btnCloseSet").onclick = () => $("mSettings").classList.add("hidden");
+$("btnSaveSet").onclick = () => { LS.set("pga_key", $("setKey").value.trim()); LS.set("pga_model", $("setModel").value.trim()); $("mSettings").classList.add("hidden"); };
+$("btnCheckKey").onclick = async () => {
+  const old = LS.get("pga_key", ""); LS.set("pga_key", $("setKey").value.trim()); $("keyMsg").textContent = "Đang kiểm tra…";
+  try {
+    const j = await (await api("/api/models", { method:"POST" })).json();
+    const dl = $("modelList"); dl.innerHTML = j.models.filter(m => /gemini/.test(m)).map(m => '<option value="' + esc(m) + '">').join("");
+    $("keyMsg").innerHTML = '<span class="ok">✓ Khóa dùng được.</span> Có thể chọn mô hình trong ô trên.';
+  } catch (e) { $("keyMsg").innerHTML = '<span class="err">' + esc(e.message) + "</span>"; if (!old) LS.del("pga_key"); else LS.set("pga_key", old); }
+};
+
+/* ---------- khởi động ---------- */
+(async function init() {
+  try { S.cfg = await (await fetch("/api/config")).json(); } catch (e) {}
+  $("maxmb").textContent = S.cfg.max_mb || 50;
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  const job = LS.get("pga_job", "");
+  if (job) { // mở lại bản đang làm dở (vd tải lại trang trên điện thoại)
+    try {
+      S.job = job;
+      const j = await (await api("/api/job/" + job + "/blocks")).json();
+      S.blocks = j.pages || {}; S.pages = j.meta.pages; S.name = j.meta.name;
+      const st = await (await api("/api/job/" + job + "/status")).json();
+      if (st.state === "running") { show("vBusy"); S.timer = setInterval(poll, 1200); poll(); return; }
+      if (Object.keys(S.blocks).length) { S.errors = st.errors || {}; renderEditor(); show("vEdit"); return; }
+      $("upName").textContent = j.meta.name + ".pdf"; $("upPages").textContent = j.meta.pages;
+      $("pFrom").value = 1; $("pTo").value = j.meta.pages; $("upInfo").classList.remove("hidden");
+    } catch (e) { LS.del("pga_job"); S.job = null; }
+  }
+})();
+</script>
+</body>
+</html>
