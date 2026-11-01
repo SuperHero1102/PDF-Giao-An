@@ -4,13 +4,20 @@ import base64
 import io
 import json
 import re
+import socket
 import time
 
 import requests
+import urllib3.util.connection as urllib3_conn
 from PIL import Image
 
+try:
+    urllib3_conn.allowed_gai_family = lambda: socket.AF_INET
+except Exception:
+    pass
+
 API = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash"
 ALLOWED = {"paragraph", "columns", "boxed", "figure", "text_figure", "formula"}
 
 PROMPT = """Bạn là công cụ chép lại đề/giáo án TOÁN tiếng Việt từ ảnh trang sang dữ liệu có cấu trúc.
