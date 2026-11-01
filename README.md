@@ -61,3 +61,8 @@ Render tự build lại (vài phút). Khóa và cài đặt trên điện thoạ
 - `app.py` máy chủ · `recognize.py` gọi Gemini · `docx_builder.py` dựng Word
 - `static/index.html` giao diện (+ `manifest.json`, `sw.js` cho PWA)
 - `tests/` đề mẫu và các bài kiểm thử
+
+## Lưu PDF
+Nút “Lưu thành PDF” ở màn hình sửa dựng bản in từ nội dung đã sửa (công thức hiển thị bằng KaTeX) rồi mở hộp In của
+trình duyệt để chọn “Lưu dưới dạng PDF”. Cách này nhẹ, miễn phí, nhưng bố cục có thể hơi khác file Word.
+Sửa đè trực tiếp lên PDF scan gốc chưa được hỗ trợ (chữ trong bản scan chỉ là hình).

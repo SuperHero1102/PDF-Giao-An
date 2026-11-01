@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>PDF Giáo Án</title>
+<title>Chuyển Đổi PDF-Word</title>
 <meta name="theme-color" content="#1d4ed8">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
@@ -58,6 +58,19 @@
   .modal .card { max-width:560px; width:100%; max-height:92vh; overflow:auto; margin:0; }
   .warn { background:#fff7e0; border:1px solid #f0d27a; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:16px; }
   .saved { font-size:15px; color:var(--mute); }
+  #printRoot { display:none; }
+  @media print {
+    @page { size: A4; margin: 18mm 20mm; }
+    html, body { background:#fff !important; }
+    header, main, .foot, .modal { display:none !important; }
+    #printRoot { display:block !important; font-family:"Times New Roman",serif; font-size:13pt; line-height:1.4; color:#000; }
+    #printRoot p { margin:0 0 3pt; }
+    #printRoot .pbreak { page-break-after:always; break-after:page; }
+    #printRoot .pcols { width:100%; border-collapse:collapse; margin:2pt 0; }
+    #printRoot .pcols td { vertical-align:top; padding:0 4pt; }
+    #printRoot .pbox, #printRoot .box { border:1.2pt solid #000; padding:1pt 10pt; font-weight:700; display:inline-block; }
+    #printRoot img { max-width:100%; }
+  }
   .foot { text-align:center; color:var(--mute); font-size:15px; padding:18px 12px 28px; }
 </style>
 </head>
@@ -112,6 +125,7 @@
 <section id="vEdit" class="hidden">
   <div class="toolbar">
     <button class="btn" id="btnDocx">⬇ Tải file Word (.docx)</button>
+    <button class="btn alt" id="btnPdf">🖨 Lưu thành PDF</button>
     <button class="btn alt small" id="btnNew">Làm file khác</button>
     <span class="saved" id="saved"></span>
   </div>
@@ -120,7 +134,23 @@
 </section>
 
 </main>
-<div class="foot">Trang web được phát triển thử nghiệm GemPro-Hai An Group nha</div>
+<div class="foot">Được phát triển bởi GemPro - Hải An Group</div>
+
+<!-- LƯU PDF -->
+<div id="mPdf" class="modal hidden">
+  <div class="card">
+    <h2 style="margin-top:0">Lưu thành PDF</h2>
+    <p>File PDF được dựng từ nội dung bạn đã sửa. Khi hộp “In” hiện ra:</p>
+    <ul>
+      <li><b>iPhone:</b> dùng hai ngón tay phóng to bản xem trước → bấm nút Chia sẻ → “Lưu vào Tệp”.</li>
+      <li><b>Android:</b> chọn “Lưu dưới dạng PDF” → bấm biểu tượng tải xuống.</li>
+      <li><b>Máy tính:</b> ở mục “Máy in / Đích đến” chọn “Lưu dưới dạng PDF”.</li>
+    </ul>
+    <p class="muted">Bố cục có thể hơi khác file Word. Cần giống hệt Word thì hãy tải file Word.</p>
+    <div class="row"><button class="btn" id="btnPdfGo">Tiếp tục</button><button class="btn alt" id="btnPdfCancel">Đóng</button></div>
+  </div>
+</div>
+<div id="printRoot"></div>
 
 <!-- CÀI ĐẶT -->
 <div id="mSettings" class="modal hidden">
@@ -383,6 +413,48 @@ $("btnDocx").onclick = async () => {
   btn.disabled = false; btn.textContent = old;
 };
 $("btnNew").onclick = () => { if (confirm("Làm file khác? Bản đang sửa vẫn được lưu tạm vài giờ, nhưng bạn sẽ không mở lại được từ đây.")) { LS.del("pga_job"); $("upInfo").classList.add("hidden"); $("homeMsg").textContent = ""; fileIn.value = ""; show("vHome"); } };
+
+/* ---------- lưu thành PDF (in từ nội dung đã sửa) ---------- */
+function printBlock(n, b) {
+  const al = a => ({ left:"left", center:"center", right:"right", justify:"justify" }[a] || "left");
+  const img = (bb, style) => '<img src="/api/job/' + S.job + "/crop/" + n + ".jpg?bbox=" + bb.join(",") + '" style="' + style + '">';
+  const figW = bb => Math.min(17, Math.max(3, (bb[2] - bb[0]) / 100 * 21));
+  switch (b.type) {
+    case "paragraph":
+      return '<p style="text-align:' + al(b.align) + ";margin-left:" + (b.indent || 0) + "cm;text-indent:" + (b.first_line ? "1cm" : "0") + '">' + rich(b.text) + "</p>";
+    case "boxed": return '<p style="text-align:center"><span class="pbox">' + rich(b.text) + "</span></p>";
+    case "formula": return '<p style="text-align:center">' + math(b.latex || "") + "</p>";
+    case "figure": return '<p style="text-align:center">' + img(b.bbox, "width:" + figW(b.bbox) + "cm") + "</p>";
+    case "columns": {
+      const w = (b.widths && b.widths.length === b.cells.length) ? b.widths : b.cells.map(() => 100 / b.cells.length);
+      const tot = w.reduce((x, y) => x + y, 0) || 1;
+      return '<table class="pcols"><tr>' + b.cells.map((c, i) => '<td style="width:' + (100 * w[i] / tot) + "%;text-align:" + al((b.aligns || [])[i]) + '">' + rich(c) + "</td>").join("") + "</tr></table>";
+    }
+    case "text_figure": {
+      const fw = Math.min(9.5, Math.max(4, figW(b.bbox)));
+      const t = '<td style="text-align:' + al(b.align) + '">' + rich(b.text) + "</td>";
+      const f = '<td style="width:' + fw + 'cm;text-align:center">' + img(b.bbox, "width:100%") + "</td>";
+      return '<table class="pcols"><tr>' + (b.side === "left" ? f + t : t + f) + "</tr></table>";
+    }
+  }
+  return "";
+}
+async function buildPrint() {
+  const nums = Object.keys(S.blocks).filter(k => (S.blocks[k] || []).length).map(Number).sort((a, b) => a - b);
+  if (!nums.length) return false;
+  $("printRoot").innerHTML = nums.map((n, i) => '<section class="' + (i < nums.length - 1 ? "pbreak" : "") + '">' + S.blocks[n].map(b => printBlock(n, b)).join("") + "</section>").join("");
+  const imgs = Array.from($("printRoot").querySelectorAll("img"));  // đợi hình tải xong rồi mới in
+  await Promise.all(imgs.map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+  return true;
+}
+$("btnPdf").onclick = () => $("mPdf").classList.remove("hidden");
+$("btnPdfCancel").onclick = () => $("mPdf").classList.add("hidden");
+$("btnPdfGo").onclick = async () => {
+  const btn = $("btnPdfGo"); btn.disabled = true; btn.textContent = "Đang chuẩn bị…";
+  try { if (await buildPrint()) { $("mPdf").classList.add("hidden"); setTimeout(() => window.print(), 150); } }
+  catch (e) { $("editMsg").innerHTML = '<div class="warn err">Không chuẩn bị được bản in: ' + esc(String(e.message || e)) + "</div>"; $("mPdf").classList.add("hidden"); }
+  btn.disabled = false; btn.textContent = "Tiếp tục";
+};
 
 /* ---------- cài đặt ---------- */
 function openSettings(msg) { $("setKey").value = LS.get("pga_key", ""); $("setModel").value = LS.get("pga_model", "") || S.cfg.model || ""; $("setMode").value = LS.get("pga_mode", "fast"); $("keyMsg").textContent = msg || ""; $("mSettings").classList.remove("hidden"); }
