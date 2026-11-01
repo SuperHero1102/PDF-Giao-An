@@ -25,8 +25,15 @@ Không dùng Docker: cài Python 3.10+, `poppler-utils`, `pandoc` (≥ 3), rồi
 `pip install -r requirements.txt` và `python app.py`.
 
 ## 3. Đưa lên mạng để dùng trên điện thoại (ví dụ Render.com)
-1. Tạo tài khoản GitHub, tạo kho mới và tải toàn bộ thư mục này lên.
-2. Vào https://render.com → New → **Web Service** → chọn kho GitHub vừa tạo.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/SuperHero1102/PDF-Giao-An)
+
+Cách 1 (Nhanh nhất): Bấm trực tiếp vào nút **Deploy to Render** ở trên hoặc truy cập liên kết:
+👉 [https://render.com/deploy?repo=https://github.com/SuperHero1102/PDF-Giao-An](https://render.com/deploy?repo=https://github.com/SuperHero1102/PDF-Giao-An)
+
+Cách 2 (Thủ công):
+1. Vào https://render.com → Đăng nhập bằng GitHub của bạn.
+2. Bấm New → **Web Service** → chọn kho **SuperHero1102/PDF-Giao-An**.
 3. Runtime chọn **Docker** (Render tự thấy Dockerfile). Chọn gói Free.
 4. (Tùy chọn) Environment → thêm `GEMINI_API_KEY`.
 5. Bấm Deploy, chờ vài phút → có địa chỉ dạng `https://ten-cua-ban.onrender.com`.
