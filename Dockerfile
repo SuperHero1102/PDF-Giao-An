@@ -13,4 +13,4 @@ COPY . .
 ENV PORT=8000
 EXPOSE 8000
 # 1 worker + nhiều luồng: tiến trình nhận dạng nằm trong bộ nhớ của worker nên không chia nhiều worker
-CMD gunicorn -w 1 --threads 8 -t 300 -b 0.0.0.0:${PORT} app:app
+CMD gunicorn -w 1 --threads 8 -t 900 -b 0.0.0.0:${PORT} app:app

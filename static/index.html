@@ -58,6 +58,7 @@
   .modal .card { max-width:560px; width:100%; max-height:92vh; overflow:auto; margin:0; }
   .warn { background:#fff7e0; border:1px solid #f0d27a; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:16px; }
   .saved { font-size:15px; color:var(--mute); }
+  .foot { text-align:center; color:var(--mute); font-size:15px; padding:18px 12px 28px; }
 </style>
 </head>
 <body>
@@ -90,6 +91,8 @@
         <label>Chỉ đọc từ trang</label><input id="pFrom" type="number" min="1" value="1">
         <label>đến trang</label><input id="pTo" type="number" min="1" value="1">
       </div>
+      <div id="manyHint" class="warn hidden">File có nhiều trang. Nên đọc từng đợt khoảng 10 trang cho ổn định:
+        đọc xong đợt này, quay lại đây chọn đợt tiếp theo (kết quả các đợt trước vẫn được giữ), cuối cùng bấm “Tải file Word”.</div>
       <button class="btn" id="btnGo">Đọc và chuyển</button>
     </div>
     <div id="homeMsg" class="err" style="margin-top:10px"></div>
@@ -117,6 +120,7 @@
 </section>
 
 </main>
+<div class="foot">Trang web được phát triển thử nghiệm GemPro-Hai An Group nha</div>
 
 <!-- CÀI ĐẶT -->
 <div id="mSettings" class="modal hidden">
@@ -132,6 +136,11 @@
     <p style="margin-bottom:4px"><label>Tên mô hình (thường để nguyên)</label></p>
     <input id="setModel" type="text" list="modelList" autocomplete="off">
     <datalist id="modelList"></datalist>
+    <p style="margin:12px 0 4px"><label>Chế độ đọc</label></p>
+    <select id="setMode">
+      <option value="fast">Nhanh (khuyên dùng)</option>
+      <option value="accurate">Kỹ hơn (chậm hơn, dùng khi đề khó đọc)</option>
+    </select>
     <div class="row" style="margin-top:12px">
       <button class="btn alt small" id="btnCheckKey">Kiểm tra khóa</button>
       <span id="keyMsg" class="muted"></span>
@@ -182,6 +191,7 @@ async function api(path, opt = {}) {
   if (key) h["X-Gemini-Key"] = key;
   const model = LS.get("pga_model", "");
   if (model) h["X-Gemini-Model"] = model;
+  h["X-Gemini-Mode"] = LS.get("pga_mode", "fast");
   let r;
   try { r = await fetch(path, Object.assign({}, opt, { headers:h })); }
   catch (e) { throw new Error("Không kết nối được tới máy chủ. Hãy kiểm tra mạng."); }
@@ -215,7 +225,8 @@ async function upload(f) {
     Object.assign(S, { job:j.job, pages:j.pages, name:j.name, blocks:{}, errors:{} });
     LS.set("pga_job", j.job);
     $("upName").textContent = j.name + ".pdf"; $("upPages").textContent = j.pages;
-    $("pFrom").value = 1; $("pTo").value = j.pages; $("pTo").max = j.pages;
+    $("pFrom").value = 1; $("pTo").value = Math.min(j.pages, 10); $("pTo").max = j.pages;
+    $("manyHint").classList.toggle("hidden", j.pages <= 10);
     $("upInfo").classList.remove("hidden"); $("homeMsg").textContent = "";
   } catch (e) { $("homeMsg").textContent = e.message; }
 }
@@ -374,10 +385,10 @@ $("btnDocx").onclick = async () => {
 $("btnNew").onclick = () => { if (confirm("Làm file khác? Bản đang sửa vẫn được lưu tạm vài giờ, nhưng bạn sẽ không mở lại được từ đây.")) { LS.del("pga_job"); $("upInfo").classList.add("hidden"); $("homeMsg").textContent = ""; fileIn.value = ""; show("vHome"); } };
 
 /* ---------- cài đặt ---------- */
-function openSettings(msg) { $("setKey").value = LS.get("pga_key", ""); $("setModel").value = LS.get("pga_model", "") || S.cfg.model || ""; $("keyMsg").textContent = msg || ""; $("mSettings").classList.remove("hidden"); }
+function openSettings(msg) { $("setKey").value = LS.get("pga_key", ""); $("setModel").value = LS.get("pga_model", "") || S.cfg.model || ""; $("setMode").value = LS.get("pga_mode", "fast"); $("keyMsg").textContent = msg || ""; $("mSettings").classList.remove("hidden"); }
 $("btnSettings").onclick = () => openSettings();
 $("btnCloseSet").onclick = () => $("mSettings").classList.add("hidden");
-$("btnSaveSet").onclick = () => { LS.set("pga_key", $("setKey").value.trim()); LS.set("pga_model", $("setModel").value.trim()); $("mSettings").classList.add("hidden"); };
+$("btnSaveSet").onclick = () => { LS.set("pga_key", $("setKey").value.trim()); LS.set("pga_model", $("setModel").value.trim()); LS.set("pga_mode", $("setMode").value); $("mSettings").classList.add("hidden"); };
 $("btnCheckKey").onclick = async () => {
   const old = LS.get("pga_key", ""); LS.set("pga_key", $("setKey").value.trim()); $("keyMsg").textContent = "Đang kiểm tra…";
   try {
@@ -402,7 +413,7 @@ $("btnCheckKey").onclick = async () => {
       if (st.state === "running") { show("vBusy"); S.timer = setInterval(poll, 1200); poll(); return; }
       if (Object.keys(S.blocks).length) { S.errors = st.errors || {}; renderEditor(); show("vEdit"); return; }
       $("upName").textContent = j.meta.name + ".pdf"; $("upPages").textContent = j.meta.pages;
-      $("pFrom").value = 1; $("pTo").value = j.meta.pages; $("upInfo").classList.remove("hidden");
+      $("pFrom").value = 1; $("pTo").value = Math.min(j.meta.pages, 10); $("manyHint").classList.toggle("hidden", j.meta.pages <= 10); $("upInfo").classList.remove("hidden");
     } catch (e) { LS.del("pga_job"); S.job = null; }
   }
 })();

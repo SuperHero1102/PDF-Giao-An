@@ -25,15 +25,8 @@ Không dùng Docker: cài Python 3.10+, `poppler-utils`, `pandoc` (≥ 3), rồi
 `pip install -r requirements.txt` và `python app.py`.
 
 ## 3. Đưa lên mạng để dùng trên điện thoại (ví dụ Render.com)
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/SuperHero1102/PDF-Giao-An)
-
-Cách 1 (Nhanh nhất): Bấm trực tiếp vào nút **Deploy to Render** ở trên hoặc truy cập liên kết:
-👉 [https://render.com/deploy?repo=https://github.com/SuperHero1102/PDF-Giao-An](https://render.com/deploy?repo=https://github.com/SuperHero1102/PDF-Giao-An)
-
-Cách 2 (Thủ công):
-1. Vào https://render.com → Đăng nhập bằng GitHub của bạn.
-2. Bấm New → **Web Service** → chọn kho **SuperHero1102/PDF-Giao-An**.
+1. Tạo tài khoản GitHub, tạo kho mới và tải toàn bộ thư mục này lên.
+2. Vào https://render.com → New → **Web Service** → chọn kho GitHub vừa tạo.
 3. Runtime chọn **Docker** (Render tự thấy Dockerfile). Chọn gói Free.
 4. (Tùy chọn) Environment → thêm `GEMINI_API_KEY`.
 5. Bấm Deploy, chờ vài phút → có địa chỉ dạng `https://ten-cua-ban.onrender.com`.
@@ -44,6 +37,17 @@ Gói miễn phí của nhiều nơi sẽ “ngủ” khi không dùng, lần m�
 - iPhone (Safari): nút Chia sẻ → “Thêm vào Màn hình chính”.
 - Android (Chrome): menu ⋮ → “Cài đặt ứng dụng”.
 (Cần địa chỉ https, các nơi đưa lên mạng ở trên đều có sẵn.)
+
+## Cập nhật bản mới lên Render
+Trên GitHub: vào kho của bạn → Add file → Upload files → kéo thả các tệp mới (ghi đè tệp cũ) → Commit.
+Render tự build lại (vài phút). Khóa và cài đặt trên điện thoại vẫn giữ nguyên.
+
+## File nhiều trang
+- Mỗi trang gửi Gemini riêng, đọc 3 trang cùng lúc, trang nào xong được lưu ngay.
+- Nên đọc từng đợt ~10 trang (ô “Chỉ đọc từ trang … đến trang …”); kết quả các đợt trước vẫn được giữ, cuối cùng bấm “Tải file Word” một lần.
+- Gói miễn phí của Gemini có hạn mức theo phút/ngày: file dài dễ chạm hạn mức, khi đó đợi rồi bấm “Thử lại” ở trang báo lỗi.
+- Word giữ đúng khổ giấy/hướng từng trang của PDF gốc (A4, A3, trang ngang…).
+- Chế độ đọc (Cài đặt): “Nhanh” (mặc định) hoặc “Kỹ hơn” cho đề khó đọc.
 
 ## Giới hạn cần biết
 - Cần có mạng và khóa Gemini. Gói miễn phí có giới hạn số lượt/phút và/ngày; hết lượt thì đợi rồi bấm “Thử lại”.

@@ -25,6 +25,7 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 
 from docx import Document
+from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.oxml import parse_xml
@@ -68,19 +69,46 @@ def _latex_to_omml_xml(latex):
     return root.find(".//{%s}oMath" % M_NS)
 
 
+def _batch_to_omml(latex_list):
+    """Đổi NHIỀU công thức bằng một lần gọi Pandoc (nhanh hơn nhiều trên máy chủ yếu).
+    Trả về list m:oMath cùng thứ tự, hoặc None nếu số lượng không khớp (khi đó đổi lẻ từng cái)."""
+    with tempfile.TemporaryDirectory() as d:
+        md, out = os.path.join(d, "a.md"), os.path.join(d, "a.docx")
+        with open(md, "w", encoding="utf-8") as f:
+            f.write("\n\n".join("$" + l + "$" for l in latex_list) + "\n")
+        r = subprocess.run(["pandoc", md, "-o", out], capture_output=True, timeout=300)
+        if r.returncode != 0 or not os.path.exists(out):
+            return None
+        xml = zipfile.ZipFile(out).read("word/document.xml")
+    root = etree.fromstring(xml)
+    paras = root.findall(".//{%s}p" % W_NS)
+    found = [p.find(".//{%s}oMath" % M_NS) for p in paras]
+    found = [x for x in found if x is not None]
+    return found if len(found) == len(latex_list) else None
+
+
 class Formulas:
-    """Đổi trước tất cả công thức (chạy song song cho nhanh) và nhớ kết quả."""
+    """Đổi trước tất cả công thức và nhớ kết quả."""
 
     def __init__(self):
         self.cache = {}
 
     def prepare(self, latex_list):
         todo = sorted(set(l.strip() for l in latex_list if l.strip()) - set(self.cache))
-        if not todo:
-            return
-        with ThreadPoolExecutor(max_workers=4) as ex:
-            for latex, el in zip(todo, ex.map(_latex_to_omml_xml, todo)):
-                self.cache[latex] = el
+        for i in range(0, len(todo), 40):
+            chunk = todo[i:i + 40]
+            res = None
+            try:
+                res = _batch_to_omml(chunk)
+            except Exception:  # noqa
+                res = None
+            if res is not None:
+                self.cache.update(zip(chunk, res))
+                continue
+            # lô có công thức lỗi -> đổi lẻ từng công thức để chỉ công thức lỗi bị tô vàng
+            with ThreadPoolExecutor(max_workers=4) as ex:
+                for latex, el in zip(chunk, ex.map(_latex_to_omml_xml, chunk)):
+                    self.cache[latex] = el
 
     def get(self, latex):
         el = self.cache.get(latex.strip())
@@ -107,8 +135,11 @@ def _collect_latex(blocks):
 # Hàm dựng từng phần
 # --------------------------------------------------------------------------
 class Builder:
-    def __init__(self, page_image_fn):
-        """page_image_fn(page_no) -> đường dẫn ảnh PNG của trang (để cắt hình)."""
+    def __init__(self, page_image_fn, sizes=None):
+        """page_image_fn(page_no) -> đường dẫn ảnh PNG của trang (để cắt hình).
+        sizes: {số_trang: (rộng_pt, cao_pt)} khổ giấy từng trang của PDF gốc (đã tính xoay)."""
+        self.sizes = sizes or {}
+        self.page_w_cm, self.content_w_cm = PAGE_W_CM, CONTENT_W_CM
         self.page_image_fn = page_image_fn
         self.doc = Document()
         self.warnings = []
@@ -238,9 +269,9 @@ class Builder:
     def _picture(self, p, page_no, bbox, max_cm):
         try:
             path, frac = self._crop(page_no, bbox)
-            width = min(frac * PAGE_W_CM, max_cm)
+            width = min(frac * self.page_w_cm, max_cm)
             p.add_run().add_picture(path, width=Cm(width))
-            return frac * PAGE_W_CM
+            return frac * self.page_w_cm
         except Exception as e:  # noqa
             self.warnings.append("Không cắt được hình (trang %s): %s" % (page_no, e))
             self._run(p, "[Không cắt được hình]", highlight=True)
@@ -264,7 +295,7 @@ class Builder:
             n = max(len(cells), 1)
             widths = b.get("widths") or [100 / n] * n
             tot = float(sum(widths)) or 1.0
-            widths_cm = [CONTENT_W_CM * float(w) / tot for w in widths]
+            widths_cm = [self.content_w_cm * float(w) / tot for w in widths]
             aligns = b.get("aligns") or ["left"] * n
             tbl = self.doc.add_table(rows=1, cols=n)
             self._no_borders(tbl)
@@ -275,12 +306,12 @@ class Builder:
             p = self.doc.add_paragraph()
             p.alignment = ALIGN.get(b.get("align", "center"))
             p.paragraph_format.space_before = Pt(6)
-            self._picture(p, page_no, b.get("bbox", [0, 0, 100, 100]), CONTENT_W_CM)
+            self._picture(p, page_no, b.get("bbox", [0, 0, 100, 100]), self.content_w_cm)
         elif t == "text_figure":
             side = b.get("side", "right")
             bbox = b.get("bbox", [50, 0, 100, 20])
-            frac_cm = min(max((float(bbox[2]) - float(bbox[0])) / 100 * PAGE_W_CM, 4.0), 9.5)
-            text_cm = CONTENT_W_CM - frac_cm - 0.2
+            frac_cm = min(max((float(bbox[2]) - float(bbox[0])) / 100 * self.page_w_cm, 4.0), 9.5)
+            text_cm = self.content_w_cm - frac_cm - 0.2
             tbl = self.doc.add_table(rows=1, cols=2)
             self._no_borders(tbl)
             order = [text_cm, frac_cm] if side == "right" else [frac_cm, text_cm]
@@ -294,6 +325,21 @@ class Builder:
         else:
             self.warnings.append("Loại khối lạ, bỏ qua: " + str(t))
 
+    def _start_page(self, n, first):
+        """Mỗi trang PDF = một "section" Word có đúng khổ giấy và hướng (dọc/ngang) của trang gốc."""
+        sec = self.doc.sections[0] if first else self.doc.add_section(WD_SECTION.NEW_PAGE)
+        w_pt, h_pt = self.sizes.get(n) or (595.0, 842.0)
+        w_cm, h_cm = w_pt / 72 * 2.54, h_pt / 72 * 2.54
+        for ref_w, ref_h in ((21.0, 29.7), (29.7, 21.0)):  # gần A4 thì lấy đúng A4
+            if abs(w_cm - ref_w) < 0.6 and abs(h_cm - ref_h) < 0.6:
+                w_cm, h_cm = ref_w, ref_h
+        sec.page_width, sec.page_height = Cm(w_cm), Cm(h_cm)
+        sec.orientation = WD_ORIENT.LANDSCAPE if w_cm > h_cm else WD_ORIENT.PORTRAIT
+        margin = 2.0 if w_cm >= 18 else max(1.0, w_cm * 0.08)
+        sec.left_margin = sec.right_margin = Cm(margin)
+        sec.top_margin, sec.bottom_margin = Cm(1.8), Cm(1.5)
+        self.page_w_cm, self.content_w_cm = w_cm, w_cm - 2 * margin
+
     # ---- toàn bộ tài liệu ---------------------------------------------------
     def build(self, pages, out_path):
         """pages: {số_trang(int): [khối,...]} theo thứ tự trang."""
@@ -301,8 +347,7 @@ class Builder:
         self.formulas.prepare(_collect_latex(all_blocks))
         first = True
         for n in sorted(pages):
-            if not first:
-                self.doc.add_page_break()
+            self._start_page(n, first)
             first = False
             for b in pages[n]:
                 self.block(b, n)

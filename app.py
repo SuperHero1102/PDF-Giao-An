@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
@@ -150,7 +151,19 @@ def upload():
             return err("File PDF đang đặt mật khẩu. Hãy mở khóa rồi tải lại.")
         return err("Không đọc được file PDF này (có thể bị hỏng).")
     pages = int(m.group(1))
-    write_json(os.path.join(d, "meta.json"), {"name": os.path.splitext(f.filename)[0], "pages": pages})
+    sizes = {}  # khổ giấy từng trang (đã tính góc xoay) để Word có đúng khổ/hướng như PDF gốc
+    try:
+        info = subprocess.run(["pdfinfo", "-f", "1", "-l", str(pages), os.path.join(d, "src.pdf")],
+                              capture_output=True, text=True, timeout=120).stdout
+        rot = {int(n): int(v) for n, v in re.findall(r"^Page\s+(\d+) rot:\s+(\d+)", info, re.M)}
+        for n, w, h in re.findall(r"^Page\s+(\d+) size:\s+([\d.]+) x ([\d.]+) pts", info, re.M):
+            w, h = float(w), float(h)
+            if rot.get(int(n), 0) in (90, 270):
+                w, h = h, w
+            sizes[n] = [w, h]
+    except Exception:  # noqa
+        pass
+    write_json(os.path.join(d, "meta.json"), {"name": os.path.splitext(f.filename)[0], "pages": pages, "sizes": sizes})
     return jsonify({"job": job, "pages": pages, "name": os.path.splitext(f.filename)[0]})
 
 
@@ -194,9 +207,11 @@ def crop_view(job, n):
 # ----------------------------------------------------------------------------
 # Nhận dạng (chạy nền, có tiến trình)
 # ----------------------------------------------------------------------------
-def _run_recognize(job, d, pages_list, key, model):
+def _run_recognize(job, d, pages_list, key, model, accurate):
+    """Đọc nhiều trang cùng lúc (mặc định 3 trang) cho nhanh; mỗi trang xong là lưu ngay."""
     st = STATUS[job]
-    for n in pages_list:
+
+    def work(n):
         st["current"] = n
         try:
             if DEMO:  # bản thử: trả dữ liệu mẫu, không gọi Gemini
@@ -204,7 +219,7 @@ def _run_recognize(job, d, pages_list, key, model):
                 blocks = sample.get(str(n), [])
                 time.sleep(0.3)
             else:
-                blocks = recognize.recognize_page(page_png(d, n), key, model)
+                blocks = recognize.recognize_page(page_png(d, n), key, model, accurate)
             with LOCK:
                 pages = load_pages(d)
                 pages[n] = blocks
@@ -213,7 +228,12 @@ def _run_recognize(job, d, pages_list, key, model):
             st["errors"][str(n)] = str(e)
         except Exception as e:  # noqa
             st["errors"][str(n)] = "Lỗi khi xử lý trang này: %s" % e
-        st["done"] += 1
+        with LOCK:
+            st["done"] += 1
+
+    workers = max(1, min(int(os.environ.get("PDFGA_PARALLEL", "3")), len(pages_list)))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        list(ex.map(work, pages_list))
     st["state"] = "done"
     st["current"] = None
 
@@ -232,12 +252,13 @@ def start_recognize(job):
     if not key and not DEMO:
         return err("Chưa có khóa Gemini. Hãy mở Cài đặt và dán khóa (xem hướng dẫn trong ứng dụng).")
     model = request.headers.get("X-Gemini-Model") or os.environ.get("GEMINI_MODEL", recognize.DEFAULT_MODEL)
+    accurate = request.headers.get("X-Gemini-Mode") == "accurate"
     with LOCK:
         if STATUS.get(job, {}).get("state") == "running":
             return err("Đang xử lý rồi, hãy đợi cho xong.")
         pages_list = list(range(a, b + 1))
         STATUS[job] = {"state": "running", "done": 0, "total": len(pages_list), "current": a, "errors": {}}
-    threading.Thread(target=_run_recognize, args=(job, d, pages_list, key, model), daemon=True).start()
+    threading.Thread(target=_run_recognize, args=(job, d, pages_list, key, model, accurate), daemon=True).start()
     return jsonify({"ok": True, "total": len(pages_list)})
 
 
@@ -279,7 +300,8 @@ def export_docx(job):
         return err("Chưa có nội dung để xuất. Hãy bấm 'Nhận dạng' trước.")
     out = os.path.join(d, "output.docx")
     try:
-        warnings = Builder(lambda n: page_png(d, n)).build(pages, out)
+        sizes = {int(k): tuple(v) for k, v in (meta.get("sizes") or {}).items()}
+        warnings = Builder(lambda n: page_png(d, n), sizes).build(pages, out)
     except Exception as e:  # noqa
         return err("Không tạo được file Word: %s" % e, 500)
     resp = send_file(out, as_attachment=True, download_name=(meta.get("name") or "tai-lieu") + ".docx",

@@ -46,8 +46,12 @@ Khung phải ôm sát TOÀN BỘ hình gồm cả nhãn điểm (A, B, C, H), s�
 
 Quy tắc về chữ và công thức trong text/cells:
 - **đậm** viết giữa hai dấu ** ; *nghiêng* viết giữa hai dấu *.  Tiêu đề như "Bài 1. (1,5 điểm)" thường in đậm.
-- MỌI biểu thức toán (kể cả đơn giản như (x+3)(2x-1)=0, y=ax+b, 15^{0}, tọa độ (-2;1), tên góc, AE.EK=HE.EB)
+- MỌI biểu thức toán (như (x+3)(2x-1)=0, y=ax+b, 15^{0}, tọa độ (-2;1), tên góc \\widehat{ABC}, AE.EK=HE.EB, phân số, lũy thừa)
   phải viết bằng LaTeX đặt trong $...$ ngay giữa câu, đúng vị trí trên trang.
+- Số thường và số kèm đơn vị trong câu văn (800 tấn thóc, 15%, 108m, 3m/giây, 120m, 1300 lít) là CHỮ THƯỜNG:
+  để NGOÀI $...$. Tên điểm/đoạn thẳng đứng một mình trong câu (A, B, AC, CH) cũng để ngoài $...$.
+- Quan trọng: bạn trả JSON nên MỌI dấu gạch chéo ngược trong LaTeX phải được viết gấp đôi
+  (ví dụ viết \\\\frac, \\\\text, \\\\widehat) để sau khi đọc JSON còn đúng một dấu gạch chéo ngược.
 - Phân số \\frac{a}{b}; mũ x^{2}; hệ phương trình \\begin{cases} dòng1 \\\\ dòng2 \\end{cases};
   góc có cung trên đầu \\widehat{ABC}; tam giác \\triangle ABC; độ: ^{0} hoặc ^{\\circ} đúng như ảnh;
   giữ nguyên dấu âm/trừ, dấu ngoặc, thứ tự số hạng, \\sin, \\cos, \\tan, \\sqrt{...}, \\le, \\ge, \\ne...
@@ -62,7 +66,28 @@ class RecognizeError(Exception):
     """Lỗi đã được dịch sang tiếng Việt để hiện cho người dùng."""
 
 
-def _page_to_jpeg_b64(path, max_side=2200):
+_MATH = re.compile(r"(\$[^$]+\$)")
+
+
+def fix_escapes(text):
+    r"""Khi mô hình viết \text / \frac / \beta / \right / \neq trong JSON mà không gấp đôi dấu \,
+    JSON hiểu thành tab / form-feed / backspace / xuống dòng và làm mất chữ (vd '120extm').
+    Hàm này khôi phục lại dấu \ trong công thức."""
+    if not text:
+        return text
+    fix = {"\t": "\\t", "\x0c": "\\f", "\x08": "\\b", "\r": "\\r", "\n": "\\n"}
+    out = []
+    for part in _MATH.split(text):
+        if part.startswith("$") and part.endswith("$") and len(part) > 1:
+            for k, v in fix.items():
+                part = part.replace(k, v)
+        else:
+            part = part.replace("\x0c", "").replace("\x08", "").replace("\t", " ")
+        out.append(part)
+    return "".join(out)
+
+
+def _page_to_jpeg_b64(path, max_side=2000):
     im = Image.open(path).convert("RGB")
     if max(im.size) > max_side:
         k = max_side / max(im.size)
@@ -126,13 +151,13 @@ def normalize_blocks(data):
         t = b["type"]
         nb = {"type": t}
         if t in ("paragraph", "boxed", "text_figure"):
-            nb["text"] = str(b.get("text", ""))
+            nb["text"] = fix_escapes(str(b.get("text", "")))
         if t == "paragraph":
             nb["align"] = b.get("align") if b.get("align") in ("left", "center", "right", "justify") else "left"
             nb["indent"] = float(b.get("indent") or 0)
             nb["first_line"] = bool(b.get("first_line"))
         if t == "columns":
-            nb["cells"] = [str(c) for c in b.get("cells", [])]
+            nb["cells"] = [fix_escapes(str(c)) for c in b.get("cells", [])]
             nb["aligns"] = [a if a in ("left", "center", "right", "justify") else "left"
                             for a in (b.get("aligns") or [])]
             if b.get("widths"):
@@ -148,12 +173,12 @@ def normalize_blocks(data):
             if t == "text_figure":
                 nb["side"] = "left" if b.get("side") == "left" else "right"
         if t == "formula":
-            nb["latex"] = str(b.get("latex", "")).strip("$ ")
+            nb["latex"] = fix_escapes("$" + str(b.get("latex", "")).strip("$ ") + "$")[1:-1]
         out.append(nb)
     return out
 
 
-def recognize_page(image_path, key, model=DEFAULT_MODEL):
+def recognize_page(image_path, key, model=DEFAULT_MODEL, accurate=False):
     body = {
         "contents": [{"parts": [
             {"text": PROMPT},
@@ -161,6 +186,11 @@ def recognize_page(image_path, key, model=DEFAULT_MODEL):
         ]}],
         "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
     }
+    # Chế độ nhanh: tắt "suy nghĩ" dài của mô hình Flash (chép chữ không cần suy luận nhiều).
+    # Nếu mô hình không nhận cấu hình này thì tự bỏ đi và thử lại bên dưới.
+    fast_cfg = (not accurate) and "flash" in model.lower()
+    if fast_cfg:
+        body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
     url = "%s/models/%s:generateContent" % (API, model)
     last = None
     for attempt in range(4):
@@ -183,6 +213,10 @@ def recognize_page(image_path, key, model=DEFAULT_MODEL):
                 last = "Gemini trả kết quả không đọc được cho trang này. Hãy thử lại."
                 time.sleep(2)
                 continue
+        if r.status_code == 400 and fast_cfg and "thinking" in (r.text or "").lower():
+            body["generationConfig"].pop("thinkingConfig", None)
+            fast_cfg = False
+            continue
         last = _translate_http_error(r.status_code, r.text)
         if r.status_code in (429, 500, 502, 503, 504):
             time.sleep(8 * (attempt + 1))
