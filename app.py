@@ -29,7 +29,7 @@ from docx_builder import Builder
 BASE = os.path.dirname(os.path.abspath(__file__))
 WORK = os.environ.get("PDFGA_WORKDIR", os.path.join(tempfile.gettempdir(), "pdfgiaoan"))
 TTL_SECONDS = int(os.environ.get("PDFGA_TTL_HOURS", "3")) * 3600  # tự xóa file tạm sau N giờ
-MAX_MB = int(os.environ.get("PDFGA_MAX_MB", "50"))
+MAX_MB = int(os.environ.get("PDFGA_MAX_MB", "100"))
 DEMO = os.environ.get("PDFGA_DEMO") == "1"  # chỉ dùng để thử máy chủ khi chưa có khóa Gemini
 
 os.makedirs(WORK, exist_ok=True)
@@ -38,6 +38,28 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_MB * 1024 * 1024
 
 LOCK = threading.Lock()
 STATUS = {}  # job_id -> trạng thái nhận dạng (trong bộ nhớ)
+GATES = {}   # job_id -> cổng chờ khi Gemini giới hạn tốc độ
+EXPORT = {}  # job_id -> trạng thái tạo file Word chạy nền
+
+
+class Gate:
+    """Khi một trang bị Gemini giới hạn tốc độ (429), cả nhóm cùng chờ rồi mới gọi tiếp (tránh dồn dập)."""
+
+    def __init__(self):
+        self.until = 0.0
+
+    def wait(self):
+        while True:
+            d = self.until - time.time()
+            if d <= 0:
+                return
+            time.sleep(min(d, 1.0))
+
+    def penalize(self, sec):
+        self.until = max(self.until, time.time() + sec)
+
+    def remaining(self):
+        return max(0, int(self.until - time.time() + 0.99))
 ID_RE = re.compile(r"^[a-f0-9]{16}$")
 
 
@@ -85,11 +107,11 @@ def cleanup_old():
             pass
 
 
-def page_png(d, n):
-    """Vẽ trang n (1..) ra PNG 200 DPI, chỉ vẽ khi cần."""
-    out = os.path.join(d, "p-%d.png" % n)
+def page_img(d, n):
+    """Vẽ trang n (1..) ra ảnh JPEG 200 DPI, chỉ vẽ khi cần. (JPEG nhẹ hơn PNG nhiều lần.)"""
+    out = os.path.join(d, "p-%d.jpg" % n)
     if not os.path.exists(out):
-        r = subprocess.run(["pdftoppm", "-r", "200", "-f", str(n), "-l", str(n), "-png",
+        r = subprocess.run(["pdftoppm", "-r", "200", "-f", str(n), "-l", str(n), "-jpeg", "-jpegopt", "quality=92",
                             "-singlefile", os.path.join(d, "src.pdf"), os.path.join(d, "p-%d" % n)],
                            capture_output=True, timeout=180)
         if r.returncode != 0 or not os.path.exists(out):
@@ -112,6 +134,14 @@ def save_pages(d, pages):
 @app.route("/")
 def index():
     return send_from_directory(os.path.join(BASE, "static"), "index.html")
+
+
+@app.route("/print/<job>")
+def print_page(job):
+    """Trang in độc lập (mở ở thẻ mới) để lưu PDF: đủ mọi trang đã đọc."""
+    resp = send_from_directory(os.path.join(BASE, "static"), "print.html")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.route("/sw.js")
@@ -175,7 +205,7 @@ def page_view(job, n):
         abort(404)
     view = os.path.join(d, "v-%d.jpg" % n)
     if not os.path.exists(view):
-        im = Image.open(page_png(d, n)).convert("RGB")
+        im = Image.open(page_img(d, n)).convert("RGB")
         im.thumbnail((1100, 1600), Image.LANCZOS)
         im.save(view, "JPEG", quality=85)
     return send_file(view, mimetype="image/jpeg", max_age=3600)
@@ -189,7 +219,7 @@ def crop_view(job, n):
         x1, y1, x2, y2 = [float(v) for v in request.args.get("bbox", "").split(",")]
     except Exception:
         abort(400)
-    im = Image.open(page_png(d, n)).convert("RGB")
+    im = Image.open(page_img(d, n)).convert("RGB")
     W, H = im.size
     box = (max(0, int(x1 / 100 * W - 0.01 * W)), max(0, int(y1 / 100 * H - 0.006 * H)),
            min(W, int(x2 / 100 * W + 0.01 * W)), min(H, int(y2 / 100 * H + 0.006 * H)))
@@ -208,22 +238,31 @@ def crop_view(job, n):
 # Nhận dạng (chạy nền, có tiến trình)
 # ----------------------------------------------------------------------------
 def _run_recognize(job, d, pages_list, key, model, accurate):
-    """Đọc nhiều trang cùng lúc (mặc định 3 trang) cho nhanh; mỗi trang xong là lưu ngay."""
-    st = STATUS[job]
+    """Đọc nhiều trang cùng lúc (mặc định 3); mỗi trang xong là lưu ngay.
+    Dừng được (nút Dừng) và tự dừng sớm khi hết hạn mức MIỄN PHÍ trong ngày."""
+    st, gate = STATUS[job], GATES[job]
 
     def work(n):
+        if st.get("cancel") or st.get("stop_reason"):  # đã bị dừng: bỏ qua trang này, không tính là lỗi
+            with LOCK:
+                st["done"] += 1
+                st["skipped"] += 1
+            return
         st["current"] = n
         try:
             if DEMO:  # bản thử: trả dữ liệu mẫu, không gọi Gemini
                 sample = read_json(os.path.join(BASE, "tests", "sample_blocks.json"), {})
-                blocks = sample.get(str(n), [])
-                time.sleep(0.3)
+                blocks = sample.get(str(n)) or [{"type": "paragraph", "text": "Nội dung trang %d: $x^{2}+%d$" % (n, n)}]
+                time.sleep(float(os.environ.get("PDFGA_DEMO_DELAY", "0.3")))
             else:
-                blocks = recognize.recognize_page(page_png(d, n), key, model, accurate)
+                blocks = recognize.recognize_page(page_img(d, n), key, model, accurate, gate)
             with LOCK:
                 pages = load_pages(d)
                 pages[n] = blocks
                 save_pages(d, pages)
+        except recognize.DailyQuotaError as e:
+            st["stop_reason"] = str(e)
+            st["errors"][str(n)] = str(e)
         except recognize.RecognizeError as e:
             st["errors"][str(n)] = str(e)
         except Exception as e:  # noqa
@@ -257,15 +296,33 @@ def start_recognize(job):
         if STATUS.get(job, {}).get("state") == "running":
             return err("Đang xử lý rồi, hãy đợi cho xong.")
         pages_list = list(range(a, b + 1))
-        STATUS[job] = {"state": "running", "done": 0, "total": len(pages_list), "current": a, "errors": {}}
+        if body.get("only_missing"):  # tiếp tục: chỉ đọc các trang chưa có nội dung
+            have = {n for n, blk in load_pages(d).items() if blk}
+            pages_list = [n for n in pages_list if n not in have]
+            if not pages_list:
+                return err("Các trang trong khoảng này đều đã có nội dung.")
+        STATUS[job] = {"state": "running", "done": 0, "total": len(pages_list), "current": pages_list[0], "errors": {},
+                       "skipped": 0, "range": [a, b], "started": time.time()}
+        GATES[job] = Gate()
     threading.Thread(target=_run_recognize, args=(job, d, pages_list, key, model, accurate), daemon=True).start()
     return jsonify({"ok": True, "total": len(pages_list)})
+
+
+@app.route("/api/job/<job>/cancel", methods=["POST"])
+def cancel(job):
+    jdir(job)
+    if job in STATUS and STATUS[job].get("state") == "running":
+        STATUS[job]["cancel"] = True
+    return jsonify({"ok": True})
 
 
 @app.route("/api/job/<job>/status")
 def status(job):
     jdir(job)
-    st = STATUS.get(job, {"state": "idle", "done": 0, "total": 0, "current": None, "errors": {}})
+    st = dict(STATUS.get(job, {"state": "idle", "done": 0, "total": 0, "current": None, "errors": {}, "skipped": 0}))
+    g = GATES.get(job)
+    st["waiting"] = g.remaining() if g and st.get("state") == "running" else 0  # đang chờ Gemini (giây)
+    st["elapsed"] = int(time.time() - st["started"]) if st.get("started") else 0
     return jsonify(st)
 
 
@@ -280,34 +337,91 @@ def blocks(job):
                         "meta": read_json(os.path.join(d, "meta.json"), {})})
     data = request.get_json(silent=True) or {}
     with LOCK:
-        save_pages(d, {int(k): recognize.normalize_blocks(v) for k, v in data.get("pages", {}).items()})
-    return jsonify({"ok": True})
+        # GỘP chứ không ghi đè: chỉ cập nhật các trang được gửi lên, giữ nguyên mọi trang khác.
+        # (Trước đây bản lưu cũ chỉ có 1 trang có thể làm mất các trang còn lại.)
+        pages = load_pages(d)
+        pages.update({int(k): recognize.normalize_blocks(v) for k, v in data.get("pages", {}).items()})
+        save_pages(d, pages)
+    return jsonify({"ok": True, "pages": sorted(n for n, b in pages.items() if b)})
 
 
 # ----------------------------------------------------------------------------
-# Xuất Word
+# Xuất Word (chạy nền có tiến trình: file dài 100+ trang không bị ngắt giữa chừng)
 # ----------------------------------------------------------------------------
-@app.route("/api/job/<job>/docx", methods=["POST"])
-def export_docx(job):
+def _merge_from_body(d, data):
+    if data.get("pages"):  # lưu luôn các trang vừa sửa (gộp, không ghi đè các trang khác)
+        with LOCK:
+            cur = load_pages(d)
+            cur.update({int(k): recognize.normalize_blocks(v) for k, v in data["pages"].items()})
+            save_pages(d, cur)
+
+
+def _build_docx(d, meta, pages, progress=None):
+    out = os.path.join(d, "output.docx")
+    sizes = {int(k): tuple(v) for k, v in (meta.get("sizes") or {}).items()}
+    return Builder(lambda n: page_img(d, n), sizes).build(pages, out, progress), out
+
+
+def _run_export(job, d, meta, pages):
+    ex = EXPORT[job]
+    try:
+        warnings, _ = _build_docx(d, meta, pages, lambda i, t: ex.update(done=i))
+        ex.update(state="done", warnings=warnings[:30], pages=sorted(pages))
+    except Exception as e:  # noqa
+        ex.update(state="error", error="Không tạo được file Word: %s" % e)
+
+
+@app.route("/api/job/<job>/docx/start", methods=["POST"])
+def export_start(job):
     d = jdir(job)
     meta = read_json(os.path.join(d, "meta.json"), {})
-    data = request.get_json(silent=True) or {}
-    if data.get("pages"):  # lưu luôn bản đang sửa trên màn hình
-        with LOCK:
-            save_pages(d, {int(k): recognize.normalize_blocks(v) for k, v in data["pages"].items()})
+    _merge_from_body(d, request.get_json(silent=True) or {})
+    pages = {n: b for n, b in load_pages(d).items() if b}
+    if not pages:
+        return err("Chưa có nội dung để xuất. Hãy bấm 'Đọc' trước.")
+    with LOCK:
+        if EXPORT.get(job, {}).get("state") == "running":
+            return err("Đang tạo file Word rồi, hãy đợi cho xong.")
+        EXPORT[job] = {"state": "running", "done": 0, "total": len(pages)}
+    threading.Thread(target=_run_export, args=(job, d, meta, pages), daemon=True).start()
+    return jsonify({"ok": True, "total": len(pages)})
+
+
+@app.route("/api/job/<job>/docx/status")
+def export_status(job):
+    jdir(job)
+    return jsonify(EXPORT.get(job, {"state": "idle"}))
+
+
+@app.route("/api/job/<job>/docx/file")
+def export_file(job):
+    d = jdir(job)
+    meta = read_json(os.path.join(d, "meta.json"), {})
+    out = os.path.join(d, "output.docx")
+    if EXPORT.get(job, {}).get("state") != "done" or not os.path.exists(out):
+        return err("File Word chưa sẵn sàng.", 409)
+    return send_file(out, as_attachment=True, download_name=(meta.get("name") or "tai-lieu") + ".docx",
+                     mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
+@app.route("/api/job/<job>/docx", methods=["POST"])
+def export_docx(job):
+    """Bản đồng bộ (giữ để tương thích/kiểm thử): tạo xong mới trả file."""
+    d = jdir(job)
+    meta = read_json(os.path.join(d, "meta.json"), {})
+    _merge_from_body(d, request.get_json(silent=True) or {})
     pages = {n: b for n, b in load_pages(d).items() if b}
     if not pages:
         return err("Chưa có nội dung để xuất. Hãy bấm 'Nhận dạng' trước.")
-    out = os.path.join(d, "output.docx")
     try:
-        sizes = {int(k): tuple(v) for k, v in (meta.get("sizes") or {}).items()}
-        warnings = Builder(lambda n: page_png(d, n), sizes).build(pages, out)
+        warnings, out = _build_docx(d, meta, pages)
     except Exception as e:  # noqa
         return err("Không tạo được file Word: %s" % e, 500)
     resp = send_file(out, as_attachment=True, download_name=(meta.get("name") or "tai-lieu") + ".docx",
                      mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     resp.headers["X-Warnings"] = quote(json.dumps(warnings[:30], ensure_ascii=False))
-    resp.headers["Access-Control-Expose-Headers"] = "X-Warnings"
+    resp.headers["X-Pages"] = ",".join(str(n) for n in sorted(pages))  # các trang có trong file Word
+    resp.headers["Access-Control-Expose-Headers"] = "X-Warnings, X-Pages"
     return resp
 
 

@@ -42,10 +42,14 @@ Gói miễn phí của nhiều nơi sẽ “ngủ” khi không dùng, lần m�
 Trên GitHub: vào kho của bạn → Add file → Upload files → kéo thả các tệp mới (ghi đè tệp cũ) → Commit.
 Render tự build lại (vài phút). Khóa và cài đặt trên điện thoại vẫn giữ nguyên.
 
-## File nhiều trang
-- Mỗi trang gửi Gemini riêng, đọc 3 trang cùng lúc, trang nào xong được lưu ngay.
-- Nên đọc từng đợt ~10 trang (ô “Chỉ đọc từ trang … đến trang …”); kết quả các đợt trước vẫn được giữ, cuối cùng bấm “Tải file Word” một lần.
-- Gói miễn phí của Gemini có hạn mức theo phút/ngày: file dài dễ chạm hạn mức, khi đó đợi rồi bấm “Thử lại” ở trang báo lỗi.
+## File nhiều trang (100+ trang)
+- Bấm **“Đọc toàn bộ file”**: máy đọc lần lượt, 3 trang cùng lúc, trang nào xong được lưu ngay; có thanh tiến trình, thời gian còn lại và nút **Dừng** (giữ các trang đã đọc).
+- Gemini báo quá tải (429) → máy tự chờ đúng thời gian Gemini yêu cầu rồi đọc tiếp, không mất trang.
+- Hết lượt **miễn phí trong ngày** → máy dừng gọn, giữ các trang đã đọc; bấm **“Đọc các trang còn thiếu”** vào ngày hôm sau (hạn mức đặt lại ≈ nửa đêm giờ Thái Bình Dương ≈ 14–15h Việt Nam) hoặc bật thanh toán cho khóa API.
+- Từ ~12 trang, màn hình sửa hiện **từng trang một** (có nút ◀ ▶ và danh sách trang) để không bị nặng/đơ trên điện thoại.
+- Tạo file Word chạy nền có tiến trình, không bị ngắt dù file dài.
+- Gói Render miễn phí ngủ khi không dùng và xóa dữ liệu tạm: app sao lưu các trang đã đọc ngay trong trình duyệt; nếu mất phiên, chọn lại đúng file PDF cũ và bấm **“Khôi phục”**. Khi đọc file dài hãy để màn hình sáng (app tự xin giữ sáng màn hình).
+- Đã thử bằng Gemini giả lập: 120 trang đọc + xuất Word đủ 120 trang (RAM ≈ 90MB), 429 tạm thời, hết hạn mức ngày, Dừng và đọc tiếp đều hoạt động.
 - Word giữ đúng khổ giấy/hướng từng trang của PDF gốc (A4, A3, trang ngang…).
 - Chế độ đọc (Cài đặt): “Nhanh” (mặc định) hoặc “Kỹ hơn” cho đề khó đọc.
 
@@ -63,6 +67,14 @@ Render tự build lại (vài phút). Khóa và cài đặt trên điện thoạ
 - `tests/` đề mẫu và các bài kiểm thử
 
 ## Lưu PDF
-Nút “Lưu thành PDF” ở màn hình sửa dựng bản in từ nội dung đã sửa (công thức hiển thị bằng KaTeX) rồi mở hộp In của
-trình duyệt để chọn “Lưu dưới dạng PDF”. Cách này nhẹ, miễn phí, nhưng bố cục có thể hơi khác file Word.
+Nút “Lưu thành PDF” mở một trang in riêng (thẻ mới) gồm MỌI trang đã đọc, công thức hiển thị bằng KaTeX; bấm “In / Lưu thành PDF”
+rồi chọn “Lưu dưới dạng PDF”. Cách này nhẹ, miễn phí, nhưng bố cục có thể hơi khác file Word.
 Sửa đè trực tiếp lên PDF scan gốc chưa được hỗ trợ (chữ trong bản scan chỉ là hình).
+
+## Lưu không làm mất trang
+- Khi sửa, app chỉ gửi các trang vừa sửa; máy chủ GỘP vào bản đã có, không ghi đè các trang khác.
+- Sau khi tải Word, app báo rõ file gồm những trang nào và trang nào chưa có nội dung.
+
+## Công thức với MathType
+File Word dùng công thức gốc của Word (OMML). Nếu cần chuyển sang MathType (Windows, MathType 7): Word → thẻ MathType →
+Convert Equations → chọn “Word 2007 and later (OMML) equations” → đích “MathType equations (OLE objects)”.

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bản in PDF</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<style>
+  body { margin:0; background:#e9edf5; font-family:"Times New Roman",serif; color:#000; }
+  .bar { position:sticky; top:0; z-index:5; background:#1d4ed8; color:#fff; padding:10px 14px; font:17px/1.45 -apple-system,"Segoe UI",Arial,sans-serif; }
+  .bar button { background:#fff; color:#1d4ed8; border:0; border-radius:10px; padding:10px 16px; font-size:18px; font-weight:700; margin-top:6px; }
+  .bar .sub { font-size:15px; opacity:.95; margin-top:4px; }
+  .warn { background:#fff7e0; color:#3b2f00; border-radius:8px; padding:6px 10px; margin-top:6px; font-size:15px; }
+  .sheet { width:21cm; max-width:calc(100vw - 16px); box-sizing:border-box; margin:12px auto; padding:18mm 20mm; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.2); font-size:13pt; line-height:1.4; }
+  .sheet p { margin:0 0 3pt; }
+  .pcols { width:100%; border-collapse:collapse; margin:2pt 0; }
+  .pcols td { vertical-align:top; padding:0 4pt; }
+  .pbox, .box { border:1.2pt solid #000; padding:1pt 10pt; font-weight:700; display:inline-block; }
+  .sheet img { max-width:100%; }
+  @media print {
+    @page { size: A4; margin: 18mm 20mm; }
+    body { background:#fff; }
+    .bar { display:none !important; }
+    .sheet { width:auto; max-width:none; margin:0; padding:0; box-shadow:none; }
+    .sheet.pbreak { page-break-after:always; break-after:page; }
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <b id="info">Đang tải…</b>
+  <div class="sub" id="how">iPhone: bấm nút bên dưới → dùng hai ngón tay phóng to bản xem trước → bấm Chia sẻ → “Lưu vào Tệp”. Android/Máy tính: chọn “Lưu dưới dạng PDF”.</div>
+  <div id="warn"></div>
+  <button id="btnPrint" disabled>🖨 In / Lưu thành PDF</button>
+</div>
+<div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="/static/render.js"></script>
+<script>
+"use strict";
+(async function () {
+  const job = location.pathname.split("/").filter(Boolean).pop();
+  const info = document.getElementById("info"), warn = document.getElementById("warn"), btn = document.getElementById("btnPrint");
+  try {
+    const r = await fetch("/api/job/" + job + "/blocks");
+    if (!r.ok) throw new Error("Không mở được bản này (có thể đã quá hạn lưu tạm). Hãy quay lại ứng dụng.");
+    const j = await r.json();
+    const nums = Object.keys(j.pages).filter(k => (j.pages[k] || []).length).map(Number).sort((a, b) => a - b);
+    if (!nums.length) throw new Error("Chưa có nội dung để in.");
+    document.getElementById("root").innerHTML = nums.map((n, i) =>
+      '<section class="sheet' + (i < nums.length - 1 ? " pbreak" : "") + '">' + j.pages[n].map(b => printBlock(job, n, b)).join("") + "</section>").join("");
+    info.textContent = "Bản in gồm " + nums.length + " trang (trang " + nums.join(", ") + ")";
+    const total = (j.meta && j.meta.pages) || nums.length;
+    const missing = []; for (let k = 1; k <= total; k++) if (!nums.includes(k)) missing.push(k);
+    if (missing.length) warn.innerHTML = '<div class="warn">Chưa có nội dung các trang: ' + missing.join(", ") + " (chưa đọc hoặc bị lỗi). Hãy đọc nốt rồi mở lại bản in.</div>";
+    const imgs = Array.from(document.querySelectorAll("img"));
+    await Promise.all(imgs.map(im => im.complete ? 0 : new Promise(res => { im.onload = im.onerror = res; })));
+    btn.disabled = false; btn.onclick = () => window.print();
+  } catch (e) { info.textContent = String(e.message || e); }
+})();
+</script>
+</body>
+</html>

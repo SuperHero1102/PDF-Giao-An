@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chuyển Đổi PDF-Word</title>
+<title>PDF Giáo Án</title>
 <meta name="theme-color" content="#1d4ed8">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
@@ -58,19 +58,6 @@
   .modal .card { max-width:560px; width:100%; max-height:92vh; overflow:auto; margin:0; }
   .warn { background:#fff7e0; border:1px solid #f0d27a; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:16px; }
   .saved { font-size:15px; color:var(--mute); }
-  #printRoot { display:none; }
-  @media print {
-    @page { size: A4; margin: 18mm 20mm; }
-    html, body { background:#fff !important; }
-    header, main, .foot, .modal { display:none !important; }
-    #printRoot { display:block !important; font-family:"Times New Roman",serif; font-size:13pt; line-height:1.4; color:#000; }
-    #printRoot p { margin:0 0 3pt; }
-    #printRoot .pbreak { page-break-after:always; break-after:page; }
-    #printRoot .pcols { width:100%; border-collapse:collapse; margin:2pt 0; }
-    #printRoot .pcols td { vertical-align:top; padding:0 4pt; }
-    #printRoot .pbox, #printRoot .box { border:1.2pt solid #000; padding:1pt 10pt; font-weight:700; display:inline-block; }
-    #printRoot img { max-width:100%; }
-  }
   .foot { text-align:center; color:var(--mute); font-size:15px; padding:18px 12px 28px; }
 </style>
 </head>
@@ -95,7 +82,7 @@
   <div class="card">
     <div id="drop" class="drop">
       <div><b>Bấm vào đây để chọn file PDF</b></div>
-      <div class="muted">hoặc kéo thả file vào ô này (tối đa <span id="maxmb">50</span>MB)</div>
+      <div class="muted">hoặc kéo thả file vào ô này (tối đa <span id="maxmb">100</span>MB)</div>
       <input id="file" type="file" accept="application/pdf,.pdf" class="hidden">
     </div>
     <div id="upInfo" class="hidden" style="margin-top:14px">
@@ -104,9 +91,10 @@
         <label>Chỉ đọc từ trang</label><input id="pFrom" type="number" min="1" value="1">
         <label>đến trang</label><input id="pTo" type="number" min="1" value="1">
       </div>
-      <div id="manyHint" class="warn hidden">File có nhiều trang. Nên đọc từng đợt khoảng 10 trang cho ổn định:
-        đọc xong đợt này, quay lại đây chọn đợt tiếp theo (kết quả các đợt trước vẫn được giữ), cuối cùng bấm “Tải file Word”.</div>
-      <button class="btn" id="btnGo">Đọc và chuyển</button>
+      <div id="manyHint" class="warn hidden"><b>File dài:</b> máy đọc lần lượt từng trang (khoảng 10–30 giây/trang, 3 trang cùng lúc). Khi đang đọc hãy <b>để màn hình sáng</b> và đừng đóng trang.
+        Nếu hết lượt miễn phí của Gemini trong ngày, máy tự dừng và <b>giữ lại các trang đã đọc</b>; hôm sau bấm “Đọc các trang còn thiếu” để làm tiếp.</div>
+      <div id="restoreBox" class="warn ok hidden"></div>
+      <button class="btn" id="btnGo">Đọc và chuyển</button> <button class="btn alt" id="btnAll">Đọc toàn bộ file</button>
     </div>
     <div id="homeMsg" class="err" style="margin-top:10px"></div>
   </div>
@@ -117,7 +105,9 @@
   <div class="card">
     <div id="busyText" style="font-weight:600;margin-bottom:10px">Đang xử lý…</div>
     <div class="bar"><div id="barFill"></div></div>
-    <p class="muted">Mỗi trang mất khoảng 10–30 giây. Bạn có thể để màn hình tự chạy.</p>
+    <div id="busyExtra" class="muted"></div>
+    <p class="muted">Mỗi trang mất khoảng 10–30 giây. Giữ màn hình sáng, đừng đóng trang. Trang nào đọc xong đều được lưu ngay.</p>
+    <button class="btn alt small" id="btnStop">⏹ Dừng (giữ các trang đã đọc)</button>
   </div>
 </section>
 
@@ -129,28 +119,29 @@
     <button class="btn alt small" id="btnNew">Làm file khác</button>
     <span class="saved" id="saved"></span>
   </div>
+  <div id="sumMsg" class="muted" style="margin-bottom:6px"></div>
   <div id="editMsg"></div>
+  <div id="pager" class="row" style="margin:8px 0"></div>
   <div id="pages"></div>
 </section>
 
 </main>
-<div class="foot">Được phát triển bởi GemPro - Hải An Group</div>
+<div class="foot">Được phát triển thử nghiệm bởi GemPro - Hải An Group</div>
 
 <!-- LƯU PDF -->
 <div id="mPdf" class="modal hidden">
   <div class="card">
     <h2 style="margin-top:0">Lưu thành PDF</h2>
-    <p>File PDF được dựng từ nội dung bạn đã sửa. Khi hộp “In” hiện ra:</p>
+    <p>Bản in sẽ mở ở thẻ mới, gồm mọi trang đã đọc. Ở thẻ đó bấm nút “In / Lưu thành PDF”, rồi:</p>
     <ul>
       <li><b>iPhone:</b> dùng hai ngón tay phóng to bản xem trước → bấm nút Chia sẻ → “Lưu vào Tệp”.</li>
       <li><b>Android:</b> chọn “Lưu dưới dạng PDF” → bấm biểu tượng tải xuống.</li>
       <li><b>Máy tính:</b> ở mục “Máy in / Đích đến” chọn “Lưu dưới dạng PDF”.</li>
     </ul>
     <p class="muted">Bố cục có thể hơi khác file Word. Cần giống hệt Word thì hãy tải file Word.</p>
-    <div class="row"><button class="btn" id="btnPdfGo">Tiếp tục</button><button class="btn alt" id="btnPdfCancel">Đóng</button></div>
+    <div class="row"><button class="btn" id="btnPdfGo">Mở bản in</button><button class="btn alt" id="btnPdfCancel">Đóng</button></div>
   </div>
 </div>
-<div id="printRoot"></div>
 
 <!-- CÀI ĐẶT -->
 <div id="mSettings" class="modal hidden">
@@ -183,6 +174,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="/static/render.js"></script>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
@@ -190,29 +182,9 @@ const LS = { get:(k,d)=>{ try { return localStorage.getItem(k) ?? d; } catch(e){
              set:(k,v)=>{ try { localStorage.setItem(k,v); } catch(e){} },
              del:(k)=>{ try { localStorage.removeItem(k); } catch(e){} } };
 
-const S = { job:null, pages:0, name:"", blocks:{}, cfg:{}, errors:{}, timer:null, saveT:null };
+const S = { job:null, pages:0, name:"", blocks:{}, cfg:{}, errors:{}, timer:null, saveT:null, dirty:new Set(), ver:{} };
 
-/* ---------- hiển thị chữ + công thức (xem trước) ---------- */
-const TOKEN = /(\$[^$]+\$|\*\*.+?\*\*|\*[^*\s][^*]*?\*)/;
-const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-function math(latex) {
-  try { if (window.katex) return katex.renderToString(latex, { throwOnError:false, output:"html" }); } catch(e){}
-  return "<code>" + esc(latex) + "</code>";
-}
-function rich(text) {
-  return (text || "").split("\n").map(line => {
-    let boxed = false;
-    if (line.startsWith("[box]")) { boxed = true; line = line.slice(5).trim(); }
-    const html = line.split(TOKEN).map(p => {
-      if (!p) return "";
-      if (p.length > 2 && p[0] === "$" && p.endsWith("$")) return math(p.slice(1,-1));
-      if (p.length > 4 && p.startsWith("**") && p.endsWith("**")) return "<b>" + esc(p.slice(2,-2)) + "</b>";
-      if (p.length > 2 && p[0] === "*" && p.endsWith("*")) return "<i>" + esc(p.slice(1,-1)) + "</i>";
-      return esc(p);
-    }).join("");
-    return boxed ? '<span class="box">' + html + "</span>" : html;
-  }).join("<br>");
-}
+/* Hiển thị chữ + công thức (rich, math, esc) nằm trong /static/render.js */
 
 /* ---------- gọi máy chủ ---------- */
 async function api(path, opt = {}) {
@@ -227,7 +199,7 @@ async function api(path, opt = {}) {
   catch (e) { throw new Error("Không kết nối được tới máy chủ. Hãy kiểm tra mạng."); }
   if (!r.ok) {
     let msg = "Có lỗi xảy ra (" + r.status + ").";
-    if (r.status === 413) msg = "File quá lớn (tối đa " + (S.cfg.max_mb || 50) + "MB).";
+    if (r.status === 413) msg = "File quá lớn (tối đa " + (S.cfg.max_mb || 100) + "MB).";
     else { try { const j = await r.json(); if (j.error) msg = j.error; } catch(e){} }
     const er = new Error(msg); er.status = r.status; throw er;
   }
@@ -246,17 +218,17 @@ drop.addEventListener("drop", e => e.dataTransfer.files[0] && upload(e.dataTrans
 async function upload(f) {
   $("homeMsg").textContent = "";
   if (!/\.pdf$/i.test(f.name) && f.type !== "application/pdf") { $("homeMsg").textContent = "Hãy chọn file PDF (đuôi .pdf)."; return; }
-  if (f.size > (S.cfg.max_mb || 50) * 1048576) { $("homeMsg").textContent = "File quá lớn (tối đa " + (S.cfg.max_mb || 50) + "MB)."; return; }
+  if (f.size > (S.cfg.max_mb || 100) * 1048576) { $("homeMsg").textContent = "File quá lớn (tối đa " + (S.cfg.max_mb || 100) + "MB)."; return; }
   $("upInfo").classList.add("hidden");
   $("homeMsg").innerHTML = '<span class="muted">Đang tải file lên…</span>';
   const fd = new FormData(); fd.append("file", f);
   try {
     const j = await (await api("/api/upload", { method:"POST", body:fd })).json();
-    Object.assign(S, { job:j.job, pages:j.pages, name:j.name, blocks:{}, errors:{} });
+    Object.assign(S, { job:j.job, pages:j.pages, name:j.name, blocks:{}, errors:{}, fsize:f.size, win:0 });
     LS.set("pga_job", j.job);
     $("upName").textContent = j.name + ".pdf"; $("upPages").textContent = j.pages;
-    $("pFrom").value = 1; $("pTo").value = Math.min(j.pages, 10); $("pTo").max = j.pages;
-    $("manyHint").classList.toggle("hidden", j.pages <= 10);
+    $("pFrom").value = 1; $("pTo").value = j.pages; $("pTo").max = j.pages;
+    $("manyHint").classList.toggle("hidden", j.pages <= 20); offerRestore();
     $("upInfo").classList.remove("hidden"); $("homeMsg").textContent = "";
   } catch (e) { $("homeMsg").textContent = e.message; }
 }
@@ -266,25 +238,73 @@ $("btnGo").onclick = () => {
   if (a > b) { $("homeMsg").textContent = "Khoảng trang chưa đúng."; return; }
   startRecognize(a, b);
 };
+$("btnAll").onclick = () => startRecognize(1, S.pages);
 
 /* ---------- 2. nhận dạng ---------- */
-async function startRecognize(a, b) {
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.running) keepAwake(true); });
+
+async function startRecognize(a, b, onlyMissing) {
   if (!S.cfg.server_key && !S.cfg.demo && !LS.get("pga_key", "")) { openSettings("Hãy dán khóa Gemini trước (làm theo 3 bước bên dưới)."); return; }
   try {
-    await api("/api/job/" + S.job + "/recognize", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ from:a, to:b }) });
-  } catch (e) { $("homeMsg").textContent = e.message; if (S.blocks && Object.keys(S.blocks).length) show("vEdit"); return; }
-  show("vBusy"); $("barFill").style.width = "2%";
+    await api("/api/job/" + S.job + "/recognize", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ from:a, to:b, only_missing:!!onlyMissing }) });
+  } catch (e) { $("homeMsg").textContent = e.message; $("editMsg").innerHTML = '<div class="warn err">' + esc(e.message) + "</div>"; if (S.blocks && Object.keys(S.blocks).length) show("vEdit"); return; }
+  S.range = [a, b]; S.running = true; S.fails = 0; keepAwake(true);
+  show("vBusy"); $("barFill").style.width = "2%"; $("busyExtra").textContent = "";
   clearInterval(S.timer);
-  S.timer = setInterval(poll, 1200); poll();
+  S.timer = setInterval(poll, 1500); poll();
 }
+$("btnStop").onclick = async () => { $("btnStop").disabled = true; $("busyText").textContent = "Đang dừng…"; try { await api("/api/job/" + S.job + "/cancel", { method:"POST" }); } catch (e) {} };
+function fmtTime(s) { s = Math.max(0, Math.round(s)); return s >= 60 ? Math.round(s / 60) + " phút" : s + " giây"; }
 async function poll() {
   try {
     const st = await (await api("/api/job/" + S.job + "/status")).json();
+    S.fails = 0;
     const pct = st.total ? Math.max(2, Math.round(100 * st.done / st.total)) : 2;
     $("barFill").style.width = pct + "%";
-    $("busyText").textContent = st.state === "running" ? "Đang đọc trang " + (st.current || "") + " (xong " + st.done + "/" + st.total + ")…" : "Hoàn tất";
-    if (st.state === "done") { clearInterval(S.timer); S.errors = st.errors || {}; await loadEditor(); }
-  } catch (e) { clearInterval(S.timer); show("vHome"); $("homeMsg").textContent = e.message; }
+    if (st.state === "running") {
+      $("busyText").textContent = "Đang đọc trang " + (st.current || "") + " (xong " + st.done + "/" + st.total + ")…";
+      let ex = "";
+      if (st.done >= 3 && st.elapsed) ex = "Còn khoảng " + fmtTime(st.elapsed / st.done * (st.total - st.done)) + ". ";
+      if (st.waiting) ex += "Gemini đang giới hạn tốc độ, máy tự chờ " + st.waiting + " giây rồi đọc tiếp. ";
+      $("busyExtra").textContent = ex;
+      $("btnStop").disabled = !!st.cancel;
+    } else if (st.state === "done") {
+      clearInterval(S.timer); S.running = false; keepAwake(false); $("btnStop").disabled = false;
+      S.errors = st.errors || {}; S.stop = st.stop_reason || (st.cancel ? "Bạn đã dừng giữa chừng." : "");
+      await saveNow(); await loadEditor();
+    }
+  } catch (e) {
+    if (e.status === 404) { clearInterval(S.timer); S.running = false; keepAwake(false); show("vHome"); $("homeMsg").textContent = "Máy chủ đã khởi động lại nên mất phiên làm việc. Hãy chọn lại đúng file PDF này; máy sẽ đề nghị khôi phục các trang đã đọc."; LS.del("pga_job"); return; }
+    if (++S.fails >= 20) { clearInterval(S.timer); S.running = false; keepAwake(false); show("vHome"); $("homeMsg").textContent = e.message; }
+    else $("busyExtra").textContent = "Mất kết nối tạm thời, đang thử lại…";
+  }
+}
+
+/* ---------- sao lưu trong máy (phòng máy chủ miễn phí khởi động lại) ---------- */
+const bkKey = () => "pga_bk_" + [S.name, S.fsize || 0, S.pages].join("|");
+function saveBackup() {
+  if (!S.fsize) return;
+  try { const o = {}; for (const k of contentPages()) o[k] = S.blocks[k]; localStorage.setItem(bkKey(), JSON.stringify(o)); } catch (e) {}
+}
+function offerRestore() {
+  const box = $("restoreBox"); box.classList.add("hidden");
+  try {
+    const o = JSON.parse(localStorage.getItem(bkKey()) || "null"); const n = o ? Object.keys(o).length : 0;
+    if (!n) return;
+    box.innerHTML = "Máy còn lưu " + n + " trang đã đọc của file này. <button class='btn small' id='btnRestore'>Khôi phục " + n + " trang</button>";
+    box.classList.remove("hidden");
+    $("btnRestore").onclick = async () => {
+      try { await api("/api/job/" + S.job + "/blocks", { method:"PUT", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ pages:o }) }); S.errors = {}; await loadEditor(); }
+      catch (e) { $("homeMsg").textContent = e.message; }
+    };
+  } catch (e) {}
 }
 
 /* ---------- 3. xem và sửa ---------- */
@@ -292,7 +312,7 @@ async function loadEditor() {
   const j = await (await api("/api/job/" + S.job + "/blocks")).json();
   S.blocks = j.pages || {};
   if (j.meta) { S.pages = j.meta.pages; S.name = j.meta.name; }
-  renderEditor(); show("vEdit");
+  S.dirty.clear(); S.win = 0; renderEditor(); updateSummary(); saveBackup(); show("vEdit");
 }
 const LABEL = { paragraph:"Đoạn chữ", columns:"Nhiều cột", boxed:"Chữ trong khung", figure:"Hình vẽ", text_figure:"Chữ + hình", formula:"Công thức" };
 
@@ -302,8 +322,29 @@ function renderEditor() {
   $("editMsg").innerHTML = errNums.length ? '<div class="warn"><b>Có trang chưa đọc được:</b><br>' +
     errNums.map(n => "Trang " + n + ": " + esc(S.errors[n]) + ' <button class="btn alt small" data-retry="' + n + '">Thử lại</button>').join("<br>") + "</div>" : "";
   document.querySelectorAll("[data-retry]").forEach(b => b.onclick = () => { delete S.errors[b.dataset.retry]; startRecognize(+b.dataset.retry, +b.dataset.retry); });
-  for (let n = 1; n <= S.pages; n++) {
-    if (!S.blocks[n] && !S.errors[n]) continue;
+  const range = S.range || [1, S.pages], have = contentPages();
+  const miss = missingPages(have).filter(n => n >= range[0] && n <= range[1]);
+  let extra = "";
+  if (S.stop) extra += '<div class="warn"><b>' + esc(S.stop) + "</b></div>";
+  if (miss.length && Object.keys(S.errors || {}).length + (S.stop ? 1 : 0) + 0 >= 0 && have.length) {
+    extra += '<div class="warn">Còn <b>' + miss.length + "</b> trang chưa đọc (" + miss.slice(0, 15).join(", ") + (miss.length > 15 ? "…" : "") + ') <button class="btn small" id="btnResume">Đọc các trang còn thiếu</button></div>';
+  }
+  $("editMsg").insertAdjacentHTML("beforeend", extra);
+  if ($("btnResume")) $("btnResume").onclick = () => { S.stop = ""; startRecognize(range[0], range[1], true); };
+  // file dài: mỗi lần chỉ hiện một nhóm trang để máy điện thoại không bị nặng
+  const shown = [];
+  for (let n = 1; n <= S.pages; n++) if (S.blocks[n] || S.errors[n]) shown.push(n);
+  const PER = 8, many = shown.length > 12, pg = $("pager"); pg.innerHTML = "";
+  let list = shown;
+  if (many) {
+    const groups = Math.ceil(shown.length / PER); S.win = Math.min(Math.max(0, S.win || 0), groups - 1);
+    list = shown.slice(S.win * PER, S.win * PER + PER);
+    const opts = Array.from({ length: groups }, (_, g) => { const s = shown.slice(g * PER, g * PER + PER); return '<option value="' + g + '"' + (g === S.win ? " selected" : "") + ">Trang " + s[0] + (s.length > 1 ? "–" + s[s.length - 1] : "") + "</option>"; }).join("");
+    pg.innerHTML = '<button class="btn alt small" id="pgPrev">◀ Trước</button><select id="pgSel" style="width:auto">' + opts + '</select><button class="btn alt small" id="pgNext">Sau ▶</button><span class="muted">(' + shown.length + " trang đã đọc)</span>";
+    const go = g => { S.win = g; renderEditor(); window.scrollTo(0, 0); };
+    $("pgPrev").onclick = () => go(S.win - 1); $("pgNext").onclick = () => go(S.win + 1); $("pgSel").onchange = e => go(+e.target.value);
+  }
+  for (const n of list) {
     const sec = document.createElement("div"); sec.className = "page"; sec.innerHTML = "<h2>Trang " + n + "</h2>";
     const cols = document.createElement("div"); cols.className = "cols";
     const orig = document.createElement("div"); orig.className = "orig";
@@ -323,7 +364,7 @@ function renderBlocks(n) {
     add.innerHTML = '<button class="btn alt small" data-add="paragraph">+ Thêm đoạn chữ</button> <button class="btn alt small" data-add="formula">+ Thêm công thức</button>';
     add.querySelectorAll("button").forEach(btn => btn.onclick = () => {
       list.push(btn.dataset.add === "formula" ? { type:"formula", latex:"" } : { type:"paragraph", text:"", align:"left", indent:0, first_line:false });
-      renderBlocks(n); changed();
+      renderBlocks(n); changed(n);
     });
     wrap.append(add);
   }
@@ -333,14 +374,14 @@ function blockCard(n, i, b) {
   const list = S.blocks[n];
   const el = document.createElement("div"); el.className = "blk";
   el.innerHTML = '<div class="hd"><span class="tag">' + (LABEL[b.type] || b.type) + '</span><button data-a="up" title="Lên">↑</button><button data-a="dn" title="Xuống">↓</button><button class="x" data-a="del" title="Xóa">✕</button></div><div class="body"></div>';
-  el.querySelector('[data-a="up"]').onclick = () => { if (i > 0) { [list[i-1], list[i]] = [list[i], list[i-1]]; renderBlocks(n); changed(); } };
-  el.querySelector('[data-a="dn"]').onclick = () => { if (i < list.length - 1) { [list[i+1], list[i]] = [list[i], list[i+1]]; renderBlocks(n); changed(); } };
-  el.querySelector('[data-a="del"]').onclick = () => { if (confirm("Xóa khối này?")) { list.splice(i, 1); renderBlocks(n); changed(); } };
+  el.querySelector('[data-a="up"]').onclick = () => { if (i > 0) { [list[i-1], list[i]] = [list[i], list[i-1]]; renderBlocks(n); changed(n); } };
+  el.querySelector('[data-a="dn"]').onclick = () => { if (i < list.length - 1) { [list[i+1], list[i]] = [list[i], list[i+1]]; renderBlocks(n); changed(n); } };
+  el.querySelector('[data-a="del"]').onclick = () => { if (confirm("Xóa khối này?")) { list.splice(i, 1); renderBlocks(n); changed(n); } };
   const body = el.querySelector(".body");
 
   const field = (value, onInput, previewTarget, asLatex) => {
     const ta = document.createElement("textarea"); ta.value = value;
-    ta.oninput = () => { onInput(ta.value); previewTarget(); changed(); };
+    ta.oninput = () => { onInput(ta.value); previewTarget(); changed(n); };
     return ta;
   };
   const pv = document.createElement("div"); pv.className = "pv";
@@ -362,9 +403,9 @@ function blockCard(n, i, b) {
     r.innerHTML = '<label>Căn</label><select style="width:auto"><option value="left">Trái</option><option value="center">Giữa</option><option value="justify">Đều hai bên</option><option value="right">Phải</option></select><label>Thụt lề (cm)</label><input type="number" step="0.5" min="0" max="8"><label><input type="checkbox"> Thụt dòng đầu</label>';
     const [sel, num, chk] = r.querySelectorAll("select,input");
     sel.value = b.align || "left"; num.value = b.indent || 0; chk.checked = !!b.first_line;
-    sel.onchange = () => { b.align = sel.value; changed(); };
-    num.oninput = () => { b.indent = +num.value || 0; changed(); };
-    chk.onchange = () => { b.first_line = chk.checked; changed(); };
+    sel.onchange = () => { b.align = sel.value; changed(n); };
+    num.oninput = () => { b.indent = +num.value || 0; changed(n); };
+    chk.onchange = () => { b.first_line = chk.checked; changed(n); };
     body.append(r);
   }
   if (b.type === "figure" || b.type === "text_figure") {
@@ -372,7 +413,7 @@ function blockCard(n, i, b) {
     ["Trái %", "Trên %", "Phải %", "Dưới %"].forEach((lab, k) => {
       const w = document.createElement("div"); w.innerHTML = "<label>" + lab + '</label><input type="number" step="0.5" min="0" max="100">';
       const inp = w.querySelector("input"); inp.value = b.bbox[k];
-      inp.oninput = () => { b.bbox[k] = Math.max(0, Math.min(100, +inp.value || 0)); clearTimeout(inp._t); inp._t = setTimeout(setImg, 500); changed(); };
+      inp.oninput = () => { b.bbox[k] = Math.max(0, Math.min(100, +inp.value || 0)); clearTimeout(inp._t); inp._t = setTimeout(setImg, 500); changed(n); };
       bb.append(w);
     });
     const img = document.createElement("img"); img.className = "fig"; img.alt = "Hình được cắt";
@@ -386,75 +427,63 @@ function blockCard(n, i, b) {
   return el;
 }
 
-/* ---------- tự lưu ---------- */
-function changed() {
+/* ---------- tự lưu (chỉ gửi các trang vừa sửa; máy chủ gộp, không làm mất trang khác) ---------- */
+function changed(n) {
+  if (n != null) { S.dirty.add(n); S.ver[n] = (S.ver[n] || 0) + 1; }
   $("saved").textContent = "Đang lưu…";
   clearTimeout(S.saveT);
   S.saveT = setTimeout(saveNow, 1500);
 }
 async function saveNow() {
+  clearTimeout(S.saveT);
+  const nums = Array.from(S.dirty);
+  if (!nums.length) return true;
+  const sent = nums.map(n => [n, S.ver[n]]), pages = {};
+  nums.forEach(n => { pages[n] = S.blocks[n] || []; });
   try {
-    await api("/api/job/" + S.job + "/blocks", { method:"PUT", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ pages:S.blocks }) });
-    $("saved").textContent = "✓ Đã lưu";
-  } catch (e) { $("saved").textContent = "Chưa lưu được: " + e.message; }
+    await api("/api/job/" + S.job + "/blocks", { method:"PUT", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ pages }) });
+    sent.forEach(([n, v]) => { if (S.ver[n] === v) S.dirty.delete(n); });  // trang sửa tiếp trong lúc lưu thì giữ lại
+    $("saved").textContent = S.dirty.size ? "Đang lưu…" : "✓ Đã lưu"; if (!S.dirty.size) saveBackup();
+    return true;
+  } catch (e) { $("saved").textContent = "Chưa lưu được: " + e.message; return false; }
+}
+function contentPages() { return Object.keys(S.blocks).filter(k => (S.blocks[k] || []).length).map(Number).sort((a, b) => a - b); }
+function missingPages(have) { const m = []; for (let k = 1; k <= S.pages; k++) if (!have.includes(k)) m.push(k); return m; }
+function updateSummary() {
+  const have = contentPages();
+  $("sumMsg").textContent = have.length ? "Đã đọc " + have.length + "/" + S.pages + " trang" + (have.length < S.pages ? " (chưa có: " + missingPages(have).join(", ") + ")" : "") : "";
 }
 
 /* ---------- tải Word ---------- */
 $("btnDocx").onclick = async () => {
   const btn = $("btnDocx"); btn.disabled = true; const old = btn.textContent; btn.textContent = "Đang tạo file Word…";
   try {
-    const r = await api("/api/job/" + S.job + "/docx", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ pages:S.blocks }) });
-    let warns = []; try { warns = JSON.parse(decodeURIComponent(r.headers.get("X-Warnings") || "[]")); } catch (e) {}
-    const blob = await r.blob(); const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = (S.name || "tai-lieu") + ".docx"; document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    $("editMsg").innerHTML = '<div class="warn ok">✓ Đã tạo file Word.</div>' + (warns.length ? '<div class="warn"><b>Chú ý:</b><br>' + warns.map(esc).join("<br>") + "<br>(Chỗ tô vàng trong Word cần sửa tay.)</div>" : "");
+    if (!(await saveNow())) throw new Error("Chưa lưu được các chỗ vừa sửa nên chưa tạo file Word. Hãy kiểm tra mạng rồi thử lại.");
+    const start = await (await api("/api/job/" + S.job + "/docx/start", { method:"POST", headers:{ "Content-Type":"application/json" }, body:"{}" })).json();
+    let st, fails = 0;
+    for (;;) {
+      await new Promise(r => setTimeout(r, 1500));
+      try { st = await (await api("/api/job/" + S.job + "/docx/status")).json(); fails = 0; } catch (e) { if (e.status === 404 || ++fails > 20) throw e; continue; }
+      if (st.state === "running") { btn.textContent = "Đang tạo Word… " + st.done + "/" + start.total + " trang"; continue; }
+      if (st.state === "error") throw new Error(st.error);
+      if (st.state === "done") break;
+      throw new Error("Không tạo được file Word.");
+    }
+    const warns = st.warnings || [], inDoc = st.pages || [];
+    const a = document.createElement("a"); a.href = "/api/job/" + S.job + "/docx/file"; a.download = (S.name || "tai-lieu") + ".docx"; document.body.append(a); a.click(); a.remove();
+    const miss = missingPages(inDoc);
+    $("editMsg").innerHTML = '<div class="warn ok">✓ Đã tạo file Word gồm ' + inDoc.length + " trang" + (inDoc.length <= 30 ? " (trang " + inDoc.join(", ") + ")" : "") + ".</div>" +
+      (miss.length ? '<div class="warn">Chưa có nội dung các trang: ' + miss.slice(0, 40).join(", ") + (miss.length > 40 ? "…" : "") + " (chưa đọc hoặc bị lỗi). Hãy đọc nốt các trang này rồi tải lại.</div>" : "") +
+      (warns.length ? '<div class="warn"><b>Chú ý:</b><br>' + warns.map(esc).join("<br>") + "<br>(Chỗ tô vàng trong Word cần sửa tay.)</div>" : "");
   } catch (e) { $("editMsg").innerHTML = '<div class="warn err">' + esc(e.message) + "</div>"; }
   btn.disabled = false; btn.textContent = old;
 };
 $("btnNew").onclick = () => { if (confirm("Làm file khác? Bản đang sửa vẫn được lưu tạm vài giờ, nhưng bạn sẽ không mở lại được từ đây.")) { LS.del("pga_job"); $("upInfo").classList.add("hidden"); $("homeMsg").textContent = ""; fileIn.value = ""; show("vHome"); } };
 
-/* ---------- lưu thành PDF (in từ nội dung đã sửa) ---------- */
-function printBlock(n, b) {
-  const al = a => ({ left:"left", center:"center", right:"right", justify:"justify" }[a] || "left");
-  const img = (bb, style) => '<img src="/api/job/' + S.job + "/crop/" + n + ".jpg?bbox=" + bb.join(",") + '" style="' + style + '">';
-  const figW = bb => Math.min(17, Math.max(3, (bb[2] - bb[0]) / 100 * 21));
-  switch (b.type) {
-    case "paragraph":
-      return '<p style="text-align:' + al(b.align) + ";margin-left:" + (b.indent || 0) + "cm;text-indent:" + (b.first_line ? "1cm" : "0") + '">' + rich(b.text) + "</p>";
-    case "boxed": return '<p style="text-align:center"><span class="pbox">' + rich(b.text) + "</span></p>";
-    case "formula": return '<p style="text-align:center">' + math(b.latex || "") + "</p>";
-    case "figure": return '<p style="text-align:center">' + img(b.bbox, "width:" + figW(b.bbox) + "cm") + "</p>";
-    case "columns": {
-      const w = (b.widths && b.widths.length === b.cells.length) ? b.widths : b.cells.map(() => 100 / b.cells.length);
-      const tot = w.reduce((x, y) => x + y, 0) || 1;
-      return '<table class="pcols"><tr>' + b.cells.map((c, i) => '<td style="width:' + (100 * w[i] / tot) + "%;text-align:" + al((b.aligns || [])[i]) + '">' + rich(c) + "</td>").join("") + "</tr></table>";
-    }
-    case "text_figure": {
-      const fw = Math.min(9.5, Math.max(4, figW(b.bbox)));
-      const t = '<td style="text-align:' + al(b.align) + '">' + rich(b.text) + "</td>";
-      const f = '<td style="width:' + fw + 'cm;text-align:center">' + img(b.bbox, "width:100%") + "</td>";
-      return '<table class="pcols"><tr>' + (b.side === "left" ? f + t : t + f) + "</tr></table>";
-    }
-  }
-  return "";
-}
-async function buildPrint() {
-  const nums = Object.keys(S.blocks).filter(k => (S.blocks[k] || []).length).map(Number).sort((a, b) => a - b);
-  if (!nums.length) return false;
-  $("printRoot").innerHTML = nums.map((n, i) => '<section class="' + (i < nums.length - 1 ? "pbreak" : "") + '">' + S.blocks[n].map(b => printBlock(n, b)).join("") + "</section>").join("");
-  const imgs = Array.from($("printRoot").querySelectorAll("img"));  // đợi hình tải xong rồi mới in
-  await Promise.all(imgs.map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
-  return true;
-}
-$("btnPdf").onclick = () => $("mPdf").classList.remove("hidden");
+/* ---------- lưu thành PDF: mở trang in riêng (đủ mọi trang đã đọc) ---------- */
+$("btnPdf").onclick = async () => { await saveNow(); $("mPdf").classList.remove("hidden"); };
 $("btnPdfCancel").onclick = () => $("mPdf").classList.add("hidden");
-$("btnPdfGo").onclick = async () => {
-  const btn = $("btnPdfGo"); btn.disabled = true; btn.textContent = "Đang chuẩn bị…";
-  try { if (await buildPrint()) { $("mPdf").classList.add("hidden"); setTimeout(() => window.print(), 150); } }
-  catch (e) { $("editMsg").innerHTML = '<div class="warn err">Không chuẩn bị được bản in: ' + esc(String(e.message || e)) + "</div>"; $("mPdf").classList.add("hidden"); }
-  btn.disabled = false; btn.textContent = "Tiếp tục";
-};
+$("btnPdfGo").onclick = () => { $("mPdf").classList.add("hidden"); window.open("/print/" + S.job, "_blank"); };
 
 /* ---------- cài đặt ---------- */
 function openSettings(msg) { $("setKey").value = LS.get("pga_key", ""); $("setModel").value = LS.get("pga_model", "") || S.cfg.model || ""; $("setMode").value = LS.get("pga_mode", "fast"); $("keyMsg").textContent = msg || ""; $("mSettings").classList.remove("hidden"); }
@@ -473,7 +502,7 @@ $("btnCheckKey").onclick = async () => {
 /* ---------- khởi động ---------- */
 (async function init() {
   try { S.cfg = await (await fetch("/api/config")).json(); } catch (e) {}
-  $("maxmb").textContent = S.cfg.max_mb || 50;
+  $("maxmb").textContent = S.cfg.max_mb || 100;
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   const job = LS.get("pga_job", "");
   if (job) { // mở lại bản đang làm dở (vd tải lại trang trên điện thoại)
@@ -485,7 +514,7 @@ $("btnCheckKey").onclick = async () => {
       if (st.state === "running") { show("vBusy"); S.timer = setInterval(poll, 1200); poll(); return; }
       if (Object.keys(S.blocks).length) { S.errors = st.errors || {}; renderEditor(); show("vEdit"); return; }
       $("upName").textContent = j.meta.name + ".pdf"; $("upPages").textContent = j.meta.pages;
-      $("pFrom").value = 1; $("pTo").value = Math.min(j.meta.pages, 10); $("manyHint").classList.toggle("hidden", j.meta.pages <= 10); $("upInfo").classList.remove("hidden");
+      $("pFrom").value = 1; $("pTo").value = j.meta.pages; $("manyHint").classList.toggle("hidden", j.meta.pages <= 20); $("upInfo").classList.remove("hidden");
     } catch (e) { LS.del("pga_job"); S.job = null; }
   }
 })();

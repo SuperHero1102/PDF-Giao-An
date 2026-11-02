@@ -66,6 +66,32 @@ class RecognizeError(Exception):
     """Lỗi đã được dịch sang tiếng Việt để hiện cho người dùng."""
 
 
+class DailyQuotaError(RecognizeError):
+    """Hết hạn mức MIỄN PHÍ TRONG NGÀY: chờ vài phút không giúp ích, phải đợi sang ngày mới."""
+
+
+def quota_info(text):
+    """Đọc thông báo 429 của Gemini -> (hết_hạn_mức_ngày, số_giây_nên_chờ hoặc None)."""
+    daily, delay, msg = False, None, text or ""
+    try:
+        err = json.loads(text).get("error", {})
+        msg = err.get("message", "") or msg
+        for d in err.get("details", []):
+            t = str(d.get("@type", ""))
+            if t.endswith("RetryInfo"):
+                m = re.match(r"([\d.]+)s", str(d.get("retryDelay", "")))
+                delay = float(m.group(1)) if m else delay
+            if t.endswith("QuotaFailure"):
+                for v in d.get("violations", []):
+                    if "perday" in (str(v.get("quotaId", "")) + str(v.get("quotaMetric", ""))).lower():
+                        daily = True
+    except Exception:  # noqa
+        pass
+    if re.search(r"per ?day", msg, re.I):
+        daily = True
+    return daily, delay
+
+
 _MATH = re.compile(r"(\$[^$]+\$)")
 
 
@@ -178,7 +204,7 @@ def normalize_blocks(data):
     return out
 
 
-def recognize_page(image_path, key, model=DEFAULT_MODEL, accurate=False):
+def recognize_page(image_path, key, model=DEFAULT_MODEL, accurate=False, gate=None):
     body = {
         "contents": [{"parts": [
             {"text": PROMPT},
@@ -193,7 +219,9 @@ def recognize_page(image_path, key, model=DEFAULT_MODEL, accurate=False):
         body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
     url = "%s/models/%s:generateContent" % (API, model)
     last = None
-    for attempt in range(4):
+    for attempt in range(6):
+        if gate is not None:
+            gate.wait()  # nếu trang khác vừa bị giới hạn tốc độ thì cả nhóm cùng chờ
         try:
             r = requests.post(url, json=body, headers={"x-goog-api-key": key}, timeout=180)
         except requests.RequestException:
@@ -218,8 +246,20 @@ def recognize_page(image_path, key, model=DEFAULT_MODEL, accurate=False):
             fast_cfg = False
             continue
         last = _translate_http_error(r.status_code, r.text)
-        if r.status_code in (429, 500, 502, 503, 504):
-            time.sleep(8 * (attempt + 1))
+        if r.status_code == 429:
+            daily, delay = quota_info(r.text)
+            if daily:
+                raise DailyQuotaError("Đã hết lượt MIỄN PHÍ của Gemini trong hôm nay. Các trang đã đọc vẫn được giữ; "
+                                      "hãy đọc tiếp vào ngày mai (hạn mức đặt lại khoảng nửa đêm giờ Thái Bình Dương) "
+                                      "hoặc bật thanh toán cho khóa API.")
+            wait = min(max(delay or 0, 8 * (attempt + 1)), 70) + 1.0
+            if gate is not None:
+                gate.penalize(wait)
+            else:
+                time.sleep(wait)
+            continue
+        if r.status_code in (500, 502, 503, 504):
+            time.sleep(min(6 * (attempt + 1), 40))
             continue
         break
     raise RecognizeError(last or "Lỗi không rõ khi gọi Gemini.")

@@ -341,15 +341,17 @@ class Builder:
         self.page_w_cm, self.content_w_cm = w_cm, w_cm - 2 * margin
 
     # ---- toàn bộ tài liệu ---------------------------------------------------
-    def build(self, pages, out_path):
-        """pages: {số_trang(int): [khối,...]} theo thứ tự trang."""
-        all_blocks = [b for n in sorted(pages) for b in pages[n]]
+    def build(self, pages, out_path, progress=None):
+        """pages: {số_trang(int): [khối,...]} theo thứ tự trang. progress(i, tổng) được gọi sau mỗi trang."""
+        all_blocks = [bb for n in sorted(pages) for bb in pages[n]]
         self.formulas.prepare(_collect_latex(all_blocks))
         first = True
-        for n in sorted(pages):
+        for i, n in enumerate(sorted(pages), 1):
             self._start_page(n, first)
             first = False
-            for b in pages[n]:
-                self.block(b, n)
+            for blk in pages[n]:
+                self.block(blk, n)
+            if progress:
+                progress(i, len(pages))
         self.doc.save(out_path)
         return self.warnings
